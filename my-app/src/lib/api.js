@@ -1,3 +1,6 @@
+import { parseError } from "./error";
+import { getToken } from "./auth";
+
 // ─── API LAYER ─────────────────────────────────────────────────────────────
 const API_BASE = "http://localhost:8080";
 const SERVICES = {
@@ -9,19 +12,25 @@ const SERVICES = {
     notifications: `${API_BASE}/api/notification-mail`,
 };
 
-let authToken = null;
-export const setApiToken = (t) => { authToken = t; };
-
 export async function apiFetch(url, opts = {}) {
-    const headers = {
-        "Content-Type": "application/json",
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        ...opts.headers,
-    };
-    const res = await fetch(url, { ...opts, headers });
-    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-    if (res.status === 204) return null;
-    return res.json();
+  const token = getToken();
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...opts.headers,
+  };
+
+  const res = await fetch(url, { ...opts, headers });
+
+  if (!res.ok) {
+    const message = await parseError(res);
+    throw new Error(message);
+  }
+
+  if (res.status === 204) return null;
+
+  return res.json();
 }
 
 export const api = {

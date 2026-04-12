@@ -12,6 +12,7 @@ import {
   ShieldCheckIcon,
   TrophyIcon,
 } from "@heroicons/react/24/outline";
+import { setToken } from "@/src/lib/auth";
 
 export default function LoginPreview() {
   const router = useRouter();
@@ -71,18 +72,10 @@ export default function LoginPreview() {
     }
 
     const token = data.access_token;
+    setToken(data.access_token);
 
-    // ✅ أهم سطر
-    localStorage.setItem("token", token);
-
-    console.log("Login success ✅");
-
-    // ✅ redirect
-    
-
-    console.log("Before redirect");
+    console.log("Login success");
     router.push("/dashboard");
-    console.log("After redirect");
 
   } catch (err) {
     console.error(err);
