@@ -10,7 +10,7 @@ export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('auth-token');
+    const token = localStorage.getItem('token');
 
     if (!token) {
       router.push('/login');

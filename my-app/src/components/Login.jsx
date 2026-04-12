@@ -15,33 +15,83 @@ import {
 
 export default function LoginPreview() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [focused, setFocused] = useState({ email: false, password: false });
+  const [focused, setFocused] = useState({ username: false, password: false });
+
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setError("");
+  //   setLoading(true);
+  //   await new Promise((r) => setTimeout(r, 700));
+  //   const user = findUserByEmail(email);
+  //   if (!user) {
+  //     setError("No account with this email. Please sign up.");
+  //     setLoading(false);
+  //     return;
+  //   }
+  //   if (user.password !== password) {
+  //     setError("Invalid password.");
+  //     setLoading(false);
+  //     return;
+  //   }
+  //   const token = "fake-jwt-token-" + Date.now();
+  //   setAuthToken(token);
+  //   setCurrentUser({ name: user.name, email: user.email });
+  //   router.push("/dashboard");
+  // };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 700));
-    const user = findUserByEmail(email);
-    if (!user) {
-      setError("No account with this email. Please sign up.");
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+
+  try {
+    const res = await fetch("http://localhost:8080/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: username,
+        password: password,
+      }),
+    });
+
+    const data = await res.json();
+    console.log("LOGIN RESPONSE:", data);
+
+
+    if (!res.ok) {
+      setError(data.error || "Login failed");
       setLoading(false);
       return;
     }
-    if (user.password !== password) {
-      setError("Invalid password.");
-      setLoading(false);
-      return;
-    }
-    const token = "fake-jwt-token-" + Date.now();
-    setAuthToken(token);
-    setCurrentUser({ name: user.name, email: user.email });
+
+    const token = data.access_token;
+
+    // ✅ أهم سطر
+    localStorage.setItem("token", token);
+
+    console.log("Login success ✅");
+
+    // ✅ redirect
+    
+
+    console.log("Before redirect");
     router.push("/dashboard");
-  };
+    console.log("After redirect");
+
+  } catch (err) {
+    console.error(err);
+    setError("Server error");
+  }
+
+  setLoading(false);
+};
+
 
   return (
     <div className="min-h-screen relative overflow-hidden flex">
@@ -151,20 +201,20 @@ export default function LoginPreview() {
             )}
 
             <div className="space-y-2">
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Email Address</label>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">UserName</label>
               <div
-                className={`relative rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.email
+                className={`relative rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.username
                     ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20"
                     : "border-slate-800"
                   }`}
               >
                 <input
-                  type="email"
-                  placeholder="you@sportify.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onFocus={() => setFocused((f) => ({ ...f, email: true }))}
-                  onBlur={() => setFocused((f) => ({ ...f, email: false }))}
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onFocus={() => setFocused((f) => ({ ...f, username: true }))}
+                  onBlur={() => setFocused((f) => ({ ...f, username: false }))}
                   className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-800 placeholder:text-slate-600"
                   required
                 />
