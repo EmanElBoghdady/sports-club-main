@@ -1,129 +1,213 @@
-import { parseError } from "./error";
-import { getToken } from "./auth";
+const API_BASE = "http://127.0.0.1:8080";
 
-// ─── API LAYER ─────────────────────────────────────────────────────────────
-const API_BASE = "http://localhost:8080";
-const SERVICES = {
-    user: `${API_BASE}/api/user-management`,
-    player: `${API_BASE}/api/player-management`,
-    training: `${API_BASE}/api/training-match`,
-    medical: `${API_BASE}/api/medical-fitness`,
-    reports: `${API_BASE}/api/reports-analytics`,
-    notifications: `${API_BASE}/api/notification-mail`,
-};
+async function apiFetch(url, options = {}) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-export async function apiFetch(url, opts = {}) {
-  const token = getToken();
+    // 1. لازم نجهز الـ headers ونحط فيها التوكن من البداية
+    const headers = {
+        "Content-Type": "application/json",
+        ...options.headers,
+    };
 
-  const headers = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...opts.headers,
-  };
+    if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+    }
 
-  const res = await fetch(url, { ...opts, headers });
 
-  if (!res.ok) {
-    const message = await parseError(res);
-    throw new Error(message);
-  }
+    let res = await fetch(url, { ...options, headers });
 
-  if (res.status === 204) return null;
+    // لو التوكن انتهى (401)
+    if (res.status === 401) {
+        try {
+            // 3. نداء دالة تجديد التوكن
+            const newToken = await api.refreshToken();
 
-  return res.json();
+            // 4. تحديث الـ headers بالتوكن الجديد وإعادة المحاولة
+            headers["Authorization"] = `Bearer ${newToken}`;
+            res = await fetch(url, { ...options, headers });
+        } catch (err) {
+            // لو الـ Refresh كمان فشل، وديه لصفحة الـ Login
+            if (typeof window !== "undefined") {
+                window.location.href = "/login";
+            }
+        }
+    }
+
+
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return res.json();
 }
 
 export const api = {
-    // Users
-    getUsers: () => apiFetch(`${SERVICES.user}/users`),
-    createUser: (d) => apiFetch(`${SERVICES.user}/users`, { method: "POST", body: JSON.stringify(d) }),
-    updateUser: (id, d) => apiFetch(`${SERVICES.user}/users/${id}`, { method: "PUT", body: JSON.stringify(d) }),
-    deleteUser: (id) => apiFetch(`${SERVICES.user}/users/${id}`, { method: "DELETE" }),
 
-    // Players
-    getPlayers: () => apiFetch(`${SERVICES.user}/players`),
-    createPlayer: (d) => apiFetch(`${SERVICES.user}/players`, { method: "POST", body: JSON.stringify(d) }),
+    adminCreateUser: (data) => apiFetch(`${API_BASE}/auth/admin/create-user`, {
+        method: "POST",
+        body: JSON.stringify(data),
+    }),
 
-    // Staff & Scouts
-    getStaff: () => apiFetch(`${SERVICES.user}/staff`),
-    createStaff: (d) => apiFetch(`${SERVICES.user}/staff`, { method: "POST", body: JSON.stringify(d) }),
-    updateStaff: (id, d) => apiFetch(`${SERVICES.user}/staff/${id}`, { method: "PUT", body: JSON.stringify(d) }),
-    getScouts: () => apiFetch(`${SERVICES.user}/scouts`),
-    createScout: (d) => apiFetch(`${SERVICES.user}/scouts`, { method: "POST", body: JSON.stringify(d) }),
+    // دالة الـ Logout
+    logout: async () => {
+        try {
+            await apiFetch(`${API_BASE}/auth/logout`, { method: "POST" });
+        } finally {
+            // بنمسح التوكنز حتى لو السيرفر رد بـ Error عشان نخرج اليوزر
+            localStorage.clear();
+            window.location.href = "/login";
+        }
+    },
 
-    // Teams & Sports
-    getTeams: () => apiFetch(`${SERVICES.user}/teams`),
-    createTeam: (d) => apiFetch(`${SERVICES.user}/teams`, { method: "POST", body: JSON.stringify(d) }),
-    updateTeam: (id, d) => apiFetch(`${SERVICES.user}/teams/${id}`, { method: "PUT", body: JSON.stringify(d) }),
-    deleteTeam: (id) => apiFetch(`${SERVICES.user}/teams/${id}`, { method: "DELETE" }),
-    getSports: () => apiFetch(`${SERVICES.user}/sports`),
-    createSport: (d) => apiFetch(`${SERVICES.user}/sports`, { method: "POST", body: JSON.stringify(d) }),
-    updateSport: (id, d) => apiFetch(`${SERVICES.user}/sports/${id}`, { method: "PUT", body: JSON.stringify(d) }),
-    deleteSport: (id) => apiFetch(`${SERVICES.user}/sports/${id}`, { method: "DELETE" }),
-    getNationalTeams: () => apiFetch(`${SERVICES.user}/national-teams`),
-    createNationalTeam: (d) => apiFetch(`${SERVICES.user}/national-teams`, { method: "POST", body: JSON.stringify(d) }),
+    refreshToken: async () => {
+        const refreshToken = localStorage.getItem("refreshToken"); // تأكدي إنك مخزناه وقت الـ Login
+        const response = await fetch(`${API_BASE}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken })
+        });
+        if (!response.ok) throw new Error("Session expired");
+        const data = await response.json();
 
-    // Contracts & Transfers
-    getContracts: () => apiFetch(`${SERVICES.player}/player-contracts`),
-    createContract: (d) => apiFetch(`${SERVICES.player}/player-contracts`, { method: "POST", body: JSON.stringify(d) }),
-    getIncomingTransfers: () => apiFetch(`${SERVICES.player}/player-transfers-incoming`),
-    createIncomingTransfer: (d) => apiFetch(`${SERVICES.player}/player-transfers-incoming`, { method: "POST", body: JSON.stringify(d) }),
-    getOutgoingTransfers: () => apiFetch(`${SERVICES.player}/player-transfers-outgoing`),
-    createOutgoingTransfer: (d) => apiFetch(`${SERVICES.player}/player-transfers-outgoing`, { method: "POST", body: JSON.stringify(d) }),
-    getRosters: () => apiFetch(`${SERVICES.player}/rosters`),
-    createRoster: (d) => apiFetch(`${SERVICES.player}/rosters`, { method: "POST", body: JSON.stringify(d) }),
+        // تحديث التوكنز في المتصفح
+        localStorage.setItem("token", data.accessToken);
+        localStorage.setItem("refreshToken", data.refreshToken);
+        return data.accessToken;
+    },
 
     // Scouting
-    getCallups: () => apiFetch(`${SERVICES.player}/player-call-ups`),
-    createCallup: (d) => apiFetch(`${SERVICES.player}/player-call-ups`, { method: "POST", body: JSON.stringify(d) }),
-    getOuterPlayers: () => apiFetch(`${SERVICES.player}/outer-players`),
-    createOuterPlayer: (d) => apiFetch(`${SERVICES.player}/outer-players`, { method: "POST", body: JSON.stringify(d) }),
-    getOuterTeams: () => apiFetch(`${SERVICES.player}/outer-teams`),
-    createOuterTeam: (d) => apiFetch(`${SERVICES.player}/outer-teams`, { method: "POST", body: JSON.stringify(d) }),
 
-    // Training
-    getTrainingSessions: () => apiFetch(`${SERVICES.training}/training-sessions`),
-    createTrainingSession: (d) => apiFetch(`${SERVICES.training}/training-sessions`, { method: "POST", body: JSON.stringify(d) }),
-    getTrainingPlans: () => apiFetch(`${SERVICES.training}/training-plans`),
-    createTrainingPlan: (d) => apiFetch(`${SERVICES.training}/training-plans`, { method: "POST", body: JSON.stringify(d) }),
-    getAttendance: () => apiFetch(`${SERVICES.training}/training-attendance`),
-    createAttendance: (d) => apiFetch(`${SERVICES.training}/training-attendance`, { method: "POST", body: JSON.stringify(d) }),
-    getDrills: () => apiFetch(`${SERVICES.training}/training-drills`),
-    createDrill: (d) => apiFetch(`${SERVICES.training}/training-drills`, { method: "POST", body: JSON.stringify(d) }),
-    createAssessment: (d) => apiFetch(`${SERVICES.training}/player-training-assessments`, { method: "POST", body: JSON.stringify(d) }),
+    getOuterPlayers: () => apiFetch(`${API_BASE}/outer-players`),
+    /** 1. Medical & Fitness Service **/
+    getInjuries: () => apiFetch(`${API_BASE}/injuries`),
+    getDiagnoses: () => apiFetch(`${API_BASE}/diagnoses`),
+    getTreatments: () => apiFetch(`${API_BASE}/treatments`),
+    getFitnessTests: () => apiFetch(`${API_BASE}/fitness-tests`),
+    getTrainingLoads: () => apiFetch(`${API_BASE}/training-loads`),
 
-    // Matches
-    getMatches: () => apiFetch(`${SERVICES.training}/matches`),
-    createMatch: (d) => apiFetch(`${SERVICES.training}/matches`, { method: "POST", body: JSON.stringify(d) }),
-    createMatchEvent: (d) => apiFetch(`${SERVICES.training}/match-events`, { method: "POST", body: JSON.stringify(d) }),
-    createLineup: (d) => apiFetch(`${SERVICES.training}/match-lineups`, { method: "POST", body: JSON.stringify(d) }),
-    createFormation: (d) => apiFetch(`${SERVICES.training}/match-formations`, { method: "POST", body: JSON.stringify(d) }),
+    /** 2. Training & Match Service **/
+    getMatches: () => apiFetch(`${API_BASE}/matches`),
+    getMatchEvents: (matchId) => apiFetch(`${API_BASE}/match-events/${matchId}`),
+    getTrainingSessions: () => apiFetch(`${API_BASE}/training-sessions`),
+    getTrainingPlans: () => apiFetch(`${API_BASE}/training-plans`),
+    getAttendance: () => apiFetch(`${API_BASE}/training-attendance`),
 
-    // Medical
-    getInjuries: () => apiFetch(`${SERVICES.medical}/injuries`),
-    createInjury: (d) => apiFetch(`${SERVICES.medical}/injuries`, { method: "POST", body: JSON.stringify(d) }),
-    createDiagnosis: (d) => apiFetch(`${SERVICES.medical}/diagnoses`, { method: "POST", body: JSON.stringify(d) }),
-    createTreatment: (d) => apiFetch(`${SERVICES.medical}/treatments`, { method: "POST", body: JSON.stringify(d) }),
-    createRehab: (d) => apiFetch(`${SERVICES.medical}/rehabilitations`, { method: "POST", body: JSON.stringify(d) }),
-    getFitnessTests: () => apiFetch(`${SERVICES.medical}/fitness-tests`),
-    createFitnessTest: (d) => apiFetch(`${SERVICES.medical}/fitness-tests`, { method: "POST", body: JSON.stringify(d) }),
+    addMatch: (data) => apiFetch(`${API_BASE}/matches`, {
+        method: "POST",
+        body: JSON.stringify(data),
+    }),
 
-    // Analytics & Reports
-    createMatchAnalysis: (d) => apiFetch(`${SERVICES.reports}/match-analyses`, { method: "POST", body: JSON.stringify(d) }),
-    createPlayerAnalytics: (d) => apiFetch(`${SERVICES.reports}/player-analytics`, { method: "POST", body: JSON.stringify(d) }),
-    createTeamAnalytics: (d) => apiFetch(`${SERVICES.reports}/team-analytics`, { method: "POST", body: JSON.stringify(d) }),
-    createTrainingAnalytics: (d) => apiFetch(`${SERVICES.reports}/training-analytics`, { method: "POST", body: JSON.stringify(d) }),
+    /** 3. Player Management Service **/
+    // ملاحظة: الـ GET مسموح للكل، الـ POST للـ ADMIN فقط
+    // getPlayers: (status = "AVAILABLE") => apiFetch(`${API_BASE}/players?status=${status}`),
 
-    // Sponsors
-    getSponsorOffers: () => apiFetch(`${SERVICES.reports}/sponsor-contract-offers`),
-    createSponsorOffer: (d) => apiFetch(`${SERVICES.reports}/sponsor-contract-offers`, { method: "POST", body: JSON.stringify(d) }),
-    updateSponsorOffer: (id, d) => apiFetch(`${SERVICES.reports}/sponsor-contract-offers/${id}`, { method: "PUT", body: JSON.stringify(d) }),
+    addOuterPlayer: (data) => apiFetch(`${API_BASE}/outer-players`, {
+        method: "POST",
+        body: JSON.stringify(data),
+    }),
+    getTeams: () => apiFetch(`${API_BASE}/teams`),
+    createTeam: (data) => apiFetch(`${API_BASE}/teams`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+    updateTeam: (id, data) => apiFetch(`${API_BASE}/teams/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+    }),
+    getSports: () => apiFetch(`${API_BASE}/sports`),
+    createSport: (data) => apiFetch(`${API_BASE}/sports`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
 
-    // Notifications & Messages
-    getUnreadNotifications: (id) => apiFetch(`${SERVICES.notifications}/notifications/recipient/${id}/unread`),
-    markNotificationRead: (id) => apiFetch(`${SERVICES.notifications}/notifications/${id}/read`, { method: "PATCH" }),
-    acknowledgeAlert: (id, kid) => apiFetch(`${SERVICES.notifications}/alerts/${id}/acknowledge?acknowledgedByKeycloakId=${kid}`, { method: "PATCH" }),
-    resolveAlert: (id) => apiFetch(`${SERVICES.notifications}/alerts/${id}/resolve`, { method: "PATCH" }),
-    createAlert: (d) => apiFetch(`${SERVICES.notifications}/alerts`, { method: "POST", body: JSON.stringify(d) }),
-    sendMessage: (d) => apiFetch(`${SERVICES.notifications}/messages`, { method: "POST", body: JSON.stringify(d) }),
+    // --- National Teams Endpoints ---
+    getNationalTeams: () => apiFetch(`${API_BASE}/national-teams`),
+    createNationalTeam: (data) => apiFetch(`${API_BASE}/national-teams`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+    getPlayerContracts: () => apiFetch(`${API_BASE}/player-contracts`),
+
+
+
+    getContracts: () => apiFetch(`${API_BASE}/contracts`),
+
+    createContract: (data) => apiFetch(`${API_BASE}/contracts`, { method: 'POST', body: JSON.stringify(data) }),
+
+    getIncomingTransfers: () => apiFetch(`${API_BASE}/transfers/incoming`),
+    createIncomingTransfer: (data) => apiFetch(`${API_BASE}/transfers/incoming`, { method: 'POST', body: JSON.stringify(data) }),
+
+    getOutgoingTransfers: () => apiFetch(`${API_BASE}/transfers/outgoing`),
+    createOutgoingTransfer: (data) => apiFetch(`${API_BASE}/transfers/outgoing`, { method: 'POST', body: JSON.stringify(data) }),
+
+    getRosters: () => apiFetch(`${API_BASE}/rosters`),
+    createRoster: (data) => apiFetch(`${API_BASE}/rosters`, { method: 'POST', body: JSON.stringify(data) }),
+
+
+
+    /** 4. User Management Service **/
+    // جربي العنوان اللي قلتي عليه
+    // في ملف api.js
+
+    getUsers: (filters = {}) => {
+        // بناء الـ Query String من الفلاتر (لو مفيش فلاتر هيبعت فاضي)
+        const params = new URLSearchParams({
+            firstName: filters.firstName || "",
+            lastName: filters.lastName || "",
+            email: filters.email || "",
+            gender: filters.gender || "",
+            role: filters.role || "",
+            minAge: filters.minAge || "",
+            maxAge: filters.maxAge || ""
+        }).toString();
+
+        return apiFetch(`${API_BASE}/users/search?${params}`);
+    },
+    getStaff: () => apiFetch(`${API_BASE}/staff`),
+    getScouts: () => apiFetch(`${API_BASE}/scouts`),
+    getSportManagers: () => apiFetch(`${API_BASE}/sport-managers`),
+    getScoutReports: () => apiFetch(`${API_BASE}/scout-reports`),
+    createStaff: (data) => apiFetch(`${API_BASE}/staff`, { method: 'POST', body: JSON.stringify(data) }),
+    updateStaff: (id, data) => apiFetch(`${API_BASE}/staff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteStaff: (id) => apiFetch(`${API_BASE}/staff/${id}`, { method: 'DELETE' }),
+
+    // Scouts Endpoints
+
+    createScout: (data) => apiFetch(`${API_BASE}/scouts`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteScout: (id) => apiFetch(`${API_BASE}/scouts/${id}`, { method: 'DELETE' }),
+
+    getCallups: () => apiFetch(`${API_BASE}/callups`),
+    getOuterPlayers: () => apiFetch(`${API_BASE}/outer-players`),
+    getOuterTeams: () => apiFetch(`${API_BASE}/outer-teams`),
+
+    // تأكدي من وجود Create أيضاً
+    createCallup: (data) => apiFetch(`${API_BASE}/callups`, { method: 'POST', body: JSON.stringify(data) }),
+
+    /** 5. Notification & Mail Service **/
+    getNotifications: () => apiFetch(`${API_BASE}/notifications`),
+    getMessages: () => apiFetch(`${API_BASE}/messages`),
+    getAlerts: () => apiFetch(`${API_BASE}/alerts`),
+    getPosts: () => apiFetch(`${API_BASE}/posts`),
+    createPost: (data) => apiFetch(`${API_BASE}/posts`, { method: 'POST', body: JSON.stringify(data) }),
+    updatePost: (id, data) => apiFetch(`${API_BASE}/posts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    getAlerts: () => apiFetch(`${API_BASE}/alerts`),
+    acknowledgeAlert: (id) => apiFetch(`${API_BASE}/alerts/${id}/acknowledge`, { method: 'POST' }),
+    resolveAlert: (id) => apiFetch(`${API_BASE}/alerts/${id}/resolve`, { method: 'POST' }),
+    markNotificationRead: (id) => apiFetch(`${API_BASE}/notifications/${id}/read`, { method: 'POST' }),
+    /** 6. Reports & Analytics Service **/
+    getTeamAnalytics: () => apiFetch(`${API_BASE}/team-analytics`),
+    getPlayerAnalytics: (id) => apiFetch(`${API_BASE}/player-analytics/${id}`),
+    getMatchAnalyses: () => apiFetch(`${API_BASE}/match-analyses`),
+
+
+
+
+
+
+    // Finance Service
+    getTransactions: () => apiFetch(`${API_BASE}/finance/transactions`),
+    getFinanceSummary: () => apiFetch(`${API_BASE}/finance/summary`),
+    exportFinancePDF: () => apiFetch(`${API_BASE}/finance/export`, { method: 'GET' }),
+    /** 7. Authentication **/
+    login: (credentials) => apiFetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        body: JSON.stringify(credentials),
+    }),
 };

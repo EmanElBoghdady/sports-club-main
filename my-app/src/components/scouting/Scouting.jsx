@@ -1,94 +1,129 @@
-"use client"
-import React, { useState } from 'react'
-import Header from '../Header';
-import Card from '../players/Card';
-import { playersData } from '../../data/playersData'
-import ScoutingCard from './ScoutingCard';
-import ScoutingModal from './ScoutingModal';
-function Scouting() {
-  const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("All Reports");
+"use client";
+import { useState, useEffect } from "react";
+import { CALLUP_STATUS } from "@/src/data/mockData";
+import { api } from "@/src/lib/api";
+import { 
+    FormModal, 
+    StatusBadge, 
+    PageHeader, 
+    AddButton, 
+    FilterTabs, 
+    Toast, 
+    EmptyState 
+} from "@/src/components/shared/SharedComponents";
 
-  const [reports, setReports] = useState(playersData);
-const [openModal, setOpenModal] = useState(false);
+const callupFields = [
+    { key: "playerKeycloakId", label: "Player ID", placeholder: "uuid..." },
+    { key: "callUpDate", label: "Call-Up Date", type: "date" },
+    { key: "returnDate", label: "Return Date", type: "date" },
+    { key: "status", label: "Status", type: "select", options: CALLUP_STATUS },
+];
+const outerPlayerFields = [
+    { key: "name", label: "Player Name", placeholder: "Full name" },
+    { key: "currentTeam", label: "Current Team", placeholder: "FC Name" },
+    { key: "position", label: "Position", placeholder: "STRIKER" },
+    { key: "age", label: "Age", type: "number" },
+    { key: "nationality", label: "Nationality", placeholder: "Algerian" },
+];
+const outerTeamFields = [
+    { key: "name", label: "Team Name", placeholder: "FC Rival" },
+    { key: "country", label: "Country", placeholder: "Algeria" },
+    { key: "league", label: "League", placeholder: "Division 1" },
+];
 
-  const filteredReports = reports.filter(player => {
-    const matchesSearch = player.name.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = activeTab === "All Reports" ||
-      (activeTab === "Top Rated" && player.rating >= 8.5) ||
-      (activeTab === "Under Review" && player.state === "Under Review") ||
-      (activeTab === "Shortlisted" && player.shortlisted);
-    return matchesSearch && matchesTab;
-  });
+export default function ScoutingOps() {
+    const [tab, setTab] = useState("callups");
+    const [data, setData] = useState({ callups: [], players: [], teams: [] });
+    const [loading, setLoading] = useState(true);
+    const [showModal, setShowModal] = useState(false);
+    const [toast, setToast] = useState(null);
 
-  return (
-    <div className="w-full h-full bg-slate-950 p-3 overflow-y-auto">
-      <Header title="Scouting Reports" desc="Talent discovery and player evaluations"
-        buttonTitle="New Report"
-         onClick={() => setOpenModal(true)} />
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            let res;
+            if (tab === "callups") res = await api.getCallups();
+            else if (tab === "outer-players") res = await api.getOuterPlayers();
+            else res = await api.getOuterTeams();
+            
+            const finalData = Array.isArray(res) ? res : (res?.content || []);
+            setData(prev => ({ 
+                ...prev, 
+                [tab === "callups" ? "callups" : tab === "outer-players" ? "players" : "teams"]: finalData 
+            }));
+        } catch (err) {
+            setToast({ msg: "Server connection failed", type: "error" });
+        } finally {
+            setLoading(false);
+        }
+    };
 
-         <ScoutingModal
-  open={openModal}
-  onClose={() => setOpenModal(false)}
-  onAddReport={(newReport) => setReports(prev => [newReport, ...prev])}
-/>
+    useEffect(() => { fetchData(); }, [tab]);
 
-      {/* Filter Bar */}
-      <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 mb-10 shadow-2xl">
-        <div className="relative w-full md:w-96 group">
-          <i className="fi fi-rr-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors"></i>
-          <input
-            type="text"
-            placeholder="Search reports or scouts..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3.5 pl-14 pr-6 text-slate-200 text-[10px] font-black uppercase tracking-widest placeholder:text-slate-700 focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all"
-          />
+    const handleSave = async (form) => {
+        try {
+            if (tab === "callups") await api.createCallup(form);
+            else if (tab === "outer-players") await api.createOuterPlayer(form);
+            else await api.createOuterTeam(form);
+            
+            setToast({ msg: "Record added to scouting radar" });
+            setShowModal(false);
+            fetchData();
+        } catch (err) {
+            setToast({ msg: "Failed to save record", type: "error" });
+        }
+    };
+
+    return (
+        <div className="w-full h-full bg-slate-950 p-6 overflow-y-auto fade-in">
+            <PageHeader
+                title="Scouting Operations"
+                subtitle="National call-ups and talent tracking"
+                action={<AddButton label="+ Add Record" onClick={() => setShowModal(true)} />}
+            />
+            <FilterTabs
+                tabs={[["callups", "🌍 Call-Ups"], ["outer-players", "🔍 Tracked Players"], ["outer-teams", "🏟️ Opponent Teams"]]}
+                active={tab} onSelect={setTab}
+            />
+
+            <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-sm">
+                {loading ? (
+                    <div className="p-20 text-center text-slate-500 font-bold animate-pulse">Scanning Radar...</div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        {tab === "callups" && (
+                            <table className="w-full">
+                                <thead className="bg-slate-900/20 border-b border-slate-800">
+                                    <tr>{["Player", "Call-Up", "Return", "Status"].map(h => <th key={h} className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">{h}</th>)}</tr>
+                                </thead>
+                                <tbody>
+                                    {data.callups.map(c => (
+                                        <tr key={c.id} className="border-b border-slate-900 hover:bg-emerald-500/[0.02] transition-colors">
+                                            <td className="px-6 py-4 font-mono text-[10px] text-slate-500">{c.playerKeycloakId?.slice(0, 16)}…</td>
+                                            <td className="px-6 py-4 text-sm text-slate-400 font-medium">{c.callUpDate}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-400 font-medium">{c.returnDate}</td>
+                                            <td className="px-6 py-4"><StatusBadge status={c.status} /></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                        {/* تكرار نفس هيكل الجدول للتبويبات الأخرى (Players, Teams) */}
+                        {((tab === "callups" && data.callups.length === 0) || (tab === "outer-players" && data.players.length === 0) || (tab === "outer-teams" && data.teams.length === 0)) &&
+                            <EmptyState icon="🔭" title="Radar is empty" />
+                        }
+                    </div>
+                )}
+            </div>
+            {showModal && (
+                <FormModal
+                    title={`Add New ${tab.replace("-", " ")}`}
+                    fields={tab === "callups" ? callupFields : tab === "outer-players" ? outerPlayerFields : outerTeamFields}
+                    onSubmit={handleSave}
+                    onClose={() => setShowModal(false)}
+                />
+            )}
+            {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
         </div>
-
-        <div className="flex bg-slate-950/50 p-1.5 rounded-2xl border border-slate-800/50 overflow-x-auto no-scrollbar w-full md:w-auto">
-          {["All Reports", "Top Rated", "Under Review", "Shortlisted"].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap
-                ${activeTab === tab
-                  ? "bg-slate-100 text-slate-950 shadow-lg shadow-white/5"
-                  : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"}`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <Card
-          title="Active Reports"
-          num="23"
-          icon={<i className="fi fi-rs-user text-xl"></i>} />
-        <Card
-          title="Recommended"
-          num="8"
-          icon={<span className="material-symbols-outlined text-xl">vital_signs</span>} />
-
-        <Card
-          title="Under Review"
-          num="10"
-          icon={<span className="material-symbols-outlined text-xl">vital_signs</span>}
-        />
-        <Card
-          title="Trials Scheduled"
-          num="5"
-          icon={<span className="material-symbols-outlined text-xl">license</span>} />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-3 gap-6 pb-10">
-        {filteredReports.map((player) => (
-          <ScoutingCard key={player.id} player={player} />
-        ))}
-      </div>
-    </div>
-  )
+    );
 }
-
-export default Scouting
