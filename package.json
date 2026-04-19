@@ -5,6 +5,7 @@
     "@tailwindcss/postcss": "^4.1.17",
     "chart.js": "^4.5.1",
     "framer-motion": "^12.23.25",
+    "keycloak-js": "^26.2.3",
     "lucide-react": "^0.556.0",
     "react-chartjs-2": "^5.3.1",
     "react-hot-toast": "^2.6.0",

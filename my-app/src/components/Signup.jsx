@@ -12,28 +12,47 @@ import {
   TrophyIcon,
 } from "@heroicons/react/24/outline";
 import { FaShieldAlt } from "react-icons/fa";
-import {
-  getUsers,
-  findUserByEmail,
-  saveUser,
-} from "@/lib/auth";
+
 
 export default function Signup() {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [age, setAge] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [gender, setGender] = useState("");
+  const [favoriteTeamId, setFavoriteTeamId] = useState("");
+
+  // UI state
+  const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [focused, setFocused] = useState({ name: false, email: false, password: false, confirm: false });
+  const [focused, setFocused] = useState({
+    firstName: false, lastName: false, username: false,
+    displayName: false, email: false, password: false,
+    confirm: false, age: false, phone: false, address: false,
+  });
+
+  useEffect(() => {
+    fetch("http://localhost:8080/teams")
+      .then((r) => r.json())
+      .then((data) => setTeams(Array.isArray(data) ? data : []))
+      .catch(() => { });
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!name || !email || !password) {
-      setError("Please fill required fields.");
+
+    if (!firstName || !lastName || !username || !email || !password) {
+      setError("Please fill all required fields.");
       return;
     }
     if (password !== confirm) {
@@ -41,21 +60,41 @@ export default function Signup() {
       return;
     }
 
-    const existing = findUserByEmail(email);
-    if (existing) {
-      setError("Email already registered. Please login.");
-      return;
-    }
-
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    saveUser({ name, email, password });
-    setLoading(false);
-    setSuccessMsg("Account created successfully. Redirecting to login...");
-    setTimeout(() => {
-      setSuccessMsg("");
-      router.push("/login");
-    }, 1500);
+    try {
+      const res = await fetch("http://localhost:8080/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+          firstName,
+          lastName,
+          age: age ? Number(age) : null,
+          phone,
+          address,
+          gender,
+          displayName: displayName || username,
+          favoriteTeamId: 1,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Signup failed. Please try again.");
+      }
+
+      setSuccessMsg("Account created successfully. Redirecting to login...");
+      setTimeout(() => {
+        setSuccessMsg("");
+        router.push("/login");
+      }, 1500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -179,29 +218,77 @@ export default function Signup() {
               </motion.div>
             )}
 
-            {/* Full Name */}
+            {/* First Name + Last Name */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-500">First Name *</label>
+                <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.firstName ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
+                  <input
+                    type="text"
+                    placeholder="First name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    onFocus={() => setFocused((f) => ({ ...f, firstName: true }))}
+                    onBlur={() => setFocused((f) => ({ ...f, firstName: false }))}
+                    className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium placeholder:text-slate-600"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Last Name *</label>
+                <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.lastName ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
+                  <input
+                    type="text"
+                    placeholder="Last name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    onFocus={() => setFocused((f) => ({ ...f, lastName: true }))}
+                    onBlur={() => setFocused((f) => ({ ...f, lastName: false }))}
+                    className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium placeholder:text-slate-600"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Username */}
             <div className="space-y-2">
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Full Name</label>
-              <div className={`relative rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.name ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"
-                }`}>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Username *</label>
+              <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.username ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
                 <input
                   type="text"
-                  placeholder="Enter your full name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onFocus={() => setFocused((f) => ({ ...f, name: true }))}
-                  onBlur={() => setFocused((f) => ({ ...f, name: false }))}
+                  placeholder="Choose a username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onFocus={() => setFocused((f) => ({ ...f, username: true }))}
+                  onBlur={() => setFocused((f) => ({ ...f, username: false }))}
                   className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium placeholder:text-slate-600"
                   required
                 />
               </div>
             </div>
 
+            {/* Display Name */}
+            <div className="space-y-2">
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Display Name</label>
+              <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.displayName ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
+                <input
+                  type="text"
+                  placeholder="How others see your name"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  onFocus={() => setFocused((f) => ({ ...f, displayName: true }))}
+                  onBlur={() => setFocused((f) => ({ ...f, displayName: false }))}
+                  className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium placeholder:text-slate-600"
+                />
+              </div>
+            </div>
+
             {/* Email */}
             <div className="space-y-2">
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Email Address</label>
-              <div className={`relative rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.email ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"
-                }`}>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Email Address *</label>
+              <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.email ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
                 <input
                   type="email"
                   placeholder="you@sportify.com"
@@ -217,9 +304,8 @@ export default function Signup() {
 
             {/* Password */}
             <div className="space-y-2">
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Password</label>
-              <div className={`relative rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.password ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"
-                }`}>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Password *</label>
+              <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.password ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
                 <input
                   type="password"
                   placeholder="Create your password"
@@ -235,9 +321,8 @@ export default function Signup() {
 
             {/* Confirm Password */}
             <div className="space-y-2">
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Confirm Password</label>
-              <div className={`relative rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.confirm ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"
-                }`}>
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Confirm Password *</label>
+              <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.confirm ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
                 <input
                   type="password"
                   placeholder="Confirm your password"
@@ -248,6 +333,90 @@ export default function Signup() {
                   className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium placeholder:text-slate-600"
                   required
                 />
+              </div>
+            </div>
+
+            {/* Age + Phone */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Age</label>
+                <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.age ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
+                  <input
+                    type="number"
+                    placeholder="Your age"
+                    value={age}
+                    min={1} max={120}
+                    onChange={(e) => setAge(e.target.value)}
+                    onFocus={() => setFocused((f) => ({ ...f, age: true }))}
+                    onBlur={() => setFocused((f) => ({ ...f, age: false }))}
+                    className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium placeholder:text-slate-600"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Phone</label>
+                <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.phone ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
+                  <input
+                    type="tel"
+                    placeholder="Phone number"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    onFocus={() => setFocused((f) => ({ ...f, phone: true }))}
+                    onBlur={() => setFocused((f) => ({ ...f, phone: false }))}
+                    className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium placeholder:text-slate-600"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Gender */}
+            <div className="space-y-2">
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Gender</label>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50">
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-slate-900 text-slate-400">Select gender</option>
+                  <option value="male" className="bg-slate-900 text-slate-200">Male</option>
+                  <option value="female" className="bg-slate-900 text-slate-200">Female</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="space-y-2">
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Address</label>
+              <div className={`rounded-2xl border bg-slate-900/50 transition-all duration-300 ${focused.address ? "border-emerald-500 ring-4 ring-emerald-500/10 shadow-lg shadow-emerald-500/20" : "border-slate-800"}`}>
+                <input
+                  type="text"
+                  placeholder="Your address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  onFocus={() => setFocused((f) => ({ ...f, address: true }))}
+                  onBlur={() => setFocused((f) => ({ ...f, address: false }))}
+                  className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium placeholder:text-slate-600"
+                />
+              </div>
+            </div>
+
+            {/* Favorite Team */}
+            <div className="space-y-2">
+              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Favorite Team</label>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50">
+                <select
+                  value={favoriteTeamId}
+                  onChange={(e) => setFavoriteTeamId(e.target.value)}
+                  className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200 font-medium appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-slate-900 text-slate-400">Select a team</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id} className="bg-slate-900 text-slate-200">
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -268,8 +437,8 @@ export default function Signup() {
                 "Create An Account"
               )}
             </motion.button>
-          </motion.form>
 
+          </motion.form>
           <p className="text-center text-slate-500 text-sm font-medium tracking-wide">
             Have an account?{" "}
             <Link href="/login" className="text-emerald-400 hover:text-emerald-300 transition-colors font-bold ml-1 decoration-emerald-400/30 underline-offset-4 hover:underline">

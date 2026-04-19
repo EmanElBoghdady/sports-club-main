@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { MOCK, ROLES } from "@/src/data/mockData";
+import { useState, useEffect } from "react";
+import { ROLES } from "@/src/data/mockData";
 import { api } from "@/src/lib/api";
 import {
     FormModal, StatusBadge, Avatar, StatCard, PageHeader, AddButton, Toast, EmptyState
@@ -16,18 +16,25 @@ const ROLE_COLORS = {
 };
 
 const fields = [
+    { key: "username", label: "Username", placeholder: "johndoe123" },
+    { key: "email", label: "Email", type: "email", placeholder: "john@club.com" },
+    { key: "password", label: "Password", type: "password", placeholder: "********" }, // مهم جداً
     { key: "firstName", label: "First Name", placeholder: "John" },
     { key: "lastName", label: "Last Name", placeholder: "Doe" },
-    { key: "email", label: "Email", type: "email", placeholder: "john@club.dz" },
-    { key: "phoneNumber", label: "Phone", placeholder: "+213555000" },
-    { key: "dateOfBirth", label: "Date of Birth", type: "date" },
+    { key: "displayName", label: "Display Name", placeholder: "Johnny" },
+    { key: "age", label: "Age", type: "number", placeholder: "25" },
+    { key: "phone", label: "Phone", placeholder: "+213..." },
+    { key: "address", label: "Address", placeholder: "123 Main St" },
     { key: "gender", label: "Gender", type: "select", options: ["MALE", "FEMALE"] },
     { key: "role", label: "Role", type: "select", options: ROLES },
-    { key: "address", label: "Address", placeholder: "123 Main St", full: true },
+    { key: "specialization", label: "Specialization", placeholder: "Goalkeeper Coach" },
+    { key: "experienceYears", label: "Experience Years", type: "number", placeholder: "5" },
+    { key: "bloodType", label: "Blood Type", type: "select", options: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"] },
+    { key: "favoriteTeamId", label: "Favorite Team ID", type: "number", placeholder: "1" },
 ];
-
 export default function UserManagement() {
-    const [data, setData] = useState(MOCK.users);
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState("ALL");
     const [showModal, setShowModal] = useState(false);
@@ -36,30 +43,88 @@ export default function UserManagement() {
 
     const showToast = (msg, type = "success") => setToast({ msg, type });
 
-    const filtered = data.filter(u =>
+    // 1. تحميل البيانات عند فتح الصفحة
+    // داخل صفحة UserManagement.jsx
+
+    const loadUsers = async () => {
+        try {
+            setLoading(true);
+
+            // تنظيف الفلاتر: نبعت الحقل فقط لو فيه قيمة فعلاً
+            const params = {};
+            if (roleFilter !== "ALL") params.role = roleFilter;
+            if (search.trim() !== "") params.firstName = search;
+
+            // نداء الـ API بالفلاتر "المنظفة"
+            const response = await api.getUsers(params);
+
+            // تحديث الداتا
+            const finalData = Array.isArray(response) ? response : response.content || response.data || [];
+            setData(finalData);
+
+            console.log("Fetched Data:", finalData); // شوفي في الكونسول هل الأدمن الجديد موجود في المصفوفة؟
+        } catch (error) {
+            console.error("Fetch error:", error);
+            showToast("Failed to fetch users", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // تأكدي إن الـ useEffect بينادي loadUsers لما الـ roleFilter يتغير
+    useEffect(() => {
+        loadUsers();
+    }, [roleFilter]); // هتعمل إعادة تحميل كل ما تغيري الفلتر
+
+    // 2. البحث والتصفية (Client-side)
+    const filtered = (data || []).filter(u =>
         (roleFilter === "ALL" || u.role === roleFilter) &&
         `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(search.toLowerCase())
     );
 
+
     const handleSave = async (form) => {
+        // تجهيز الداتا وتحويل الأنواع بدقة لتطابق البوست مان
+        const payload = {
+            ...form,
+
+            age: form.age ? Number(form.age) : 0,
+            experienceYears: form.experienceYears ? Number(form.experienceYears) : 0,
+            favoriteTeamId: form.favoriteTeamId ? Number(form.favoriteTeamId) : 1,
+
+            gender: form.gender?.toUpperCase(),
+            role: form.role?.toUpperCase(),
+            bloodType: form.bloodType?.toUpperCase(),
+        };
+
+        console.log("🚀 Payload being sent to server:", payload);
+
         try {
-            if (editItem) {
-                await api.updateUser(editItem.id, form).catch(() => { });
-                setData(d => d.map(u => u.id === editItem.id ? { ...u, ...form } : u));
-                showToast("User updated");
-            } else {
-                await api.createUser(form).catch(() => { });
-                setData(d => [...d, { ...form, id: Date.now() }]);
-                showToast("User created");
-            }
-        } catch { showToast("Saved locally", "info"); }
-        setShowModal(false); setEditItem(null);
+            // نداء الأندبوينت الخاص بالأدمن
+            const res = await api.adminCreateUser(payload);
+            console.log("✅ Success Response:", res);
+            showToast("User created successfully!");
+            loadUsers();
+        } catch (error) {
+            console.error("❌ Request Failed:", error);
+            showToast("Bad Request (400): راجعي البيانات المدخلة", "error");
+        }
+        setShowModal(false);
+        setEditItem(null);
+    };
+    // 4. حذف مستخدم
+    const handleDelete = async (id) => {
+        if (!confirm("Are you sure you want to delete this user?")) return;
+        try {
+            await api.deleteUser(id);
+            showToast("User deleted from server", "error");
+            loadUsers();
+        } catch (error) {
+            showToast("Error deleting user", "error");
+        }
     };
 
-    const handleDelete = (id) => {
-        setData(d => d.filter(u => u.id !== id));
-        showToast("User deleted", "error");
-    };
+    if (loading) return <div className="p-10 text-emerald-500 font-bold">Connecting to Services...</div>;
 
     return (
         <div className="fade-in">
@@ -132,12 +197,12 @@ export default function UserManagement() {
                                         <div className="flex items-center gap-3">
                                             <button
                                                 onClick={() => { setEditItem(u); setShowModal(true); }}
-                                                className="p-2 rounded-lg text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90"
+                                                className="cursor-pointerp-2 rounded-lg text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90"
                                                 title="Edit"
                                             >✏️</button>
                                             <button
                                                 onClick={() => handleDelete(u.id)}
-                                                className="p-2 rounded-lg text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
+                                                className="cursor-pointer p-2 rounded-lg text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
                                                 title="Delete"
                                             >🗑</button>
                                         </div>
