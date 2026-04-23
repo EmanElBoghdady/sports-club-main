@@ -1,29 +1,7 @@
-"use client"
-import React, { useState } from "react";
+"use client";
+import React, { useCallback, useState, useEffect } from "react";
 import { BadgeDollarSign, Calendar, CheckCircle2 } from "lucide-react";
-
-const initialOffers = [
-  {
-    id: 1,
-    sponsorName: "SportsBrand Co.",
-    offerTitle: "Kit Sponsorship 2025/2026",
-    contractValue: 500000,
-    status: "PENDING",
-    type: "KIT",
-    startDate: "2025-07-01",
-    endDate: "2026-06-30",
-  },
-  {
-    id: 2,
-    sponsorName: "TechCorp",
-    offerTitle: "Data Partner",
-    contractValue: 180000,
-    status: "ACCEPTED",
-    type: "DIGITAL",
-    startDate: "2025-01-01",
-    endDate: "2025-12-31",
-  },
-];
+import { api } from "../../lib/api";
 
 const typeColors = {
   KIT: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -34,18 +12,54 @@ const typeColors = {
 export default function SponsorOffers() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All Offers");
-  const [offers, setOffers] = useState(initialOffers);
+  const [offers, setOffers] = useState([]);
 
-  const acceptOffer = (id) => {
-    setOffers((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status: "ACCEPTED" } : o))
-    );
+  const loadOffers = useCallback(async () => {
+    try {
+      const data = await api.getSponsorOffers();
+
+      const mapped = data.map((o) => ({
+        id: o.id,
+        sponsorName: o.sponsorName,
+        offerTitle: o.title,
+        contractValue: o.contractValue,
+        status: o.status,
+        type: o.type,
+        startDate: o.startDate,
+        endDate: o.endDate,
+      }));
+
+      setOffers(mapped);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOffers();
+  }, [loadOffers]);
+
+  const acceptOffer = async (id) => {
+    try {
+      const offer = offers.find((o) => o.id === id);
+
+      await api.updateSponsorOffer(id, {
+        ...offer,
+        status: "ACCEPTED",
+      });
+
+      await loadOffers(); // refresh
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const filteredOffers = offers.filter(offer => {
-    const matchesSearch = offer.sponsorName.toLowerCase().includes(search.toLowerCase()) ||
+  const filteredOffers = offers.filter((offer) => {
+    const matchesSearch =
+      offer.sponsorName.toLowerCase().includes(search.toLowerCase()) ||
       offer.offerTitle.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = activeTab === "All Offers" || offer.status === activeTab.toUpperCase();
+    const matchesTab =
+      activeTab === "All Offers" || offer.status === activeTab.toUpperCase();
     return matchesSearch && matchesTab;
   });
 
@@ -59,6 +73,20 @@ export default function SponsorOffers() {
     KIT: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     DIGITAL: "bg-sky-500/10 text-sky-400 border-sky-500/20",
     STADIUM: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  };
+
+  const handleDelete = async (id) => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this offer?",
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteSponsorOffer(id);
+      setOffers((prev) => prev.filter((offer) => offer.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -77,19 +105,25 @@ export default function SponsorOffers() {
 
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-slate-900/50 rounded-2xl px-5 py-4 border border-slate-800 shadow-xl min-w-[120px]">
-              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Total offers</p>
+              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">
+                Total offers
+              </p>
               <p className="text-xl font-black text-slate-100 tracking-tight">
                 {offers.length}
               </p>
             </div>
             <div className="bg-slate-900/50 rounded-2xl px-5 py-4 border border-slate-800 shadow-xl min-w-[120px]">
-              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Pending</p>
+              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">
+                Pending
+              </p>
               <p className="text-xl font-black text-amber-500 tracking-tight">
                 {pendingCount}
               </p>
             </div>
             <div className="bg-slate-900/50 rounded-2xl px-5 py-4 border border-slate-800 shadow-xl min-w-[120px]">
-              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Active value</p>
+              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">
+                Active value
+              </p>
               <p className="text-xl font-black text-emerald-500 tracking-tight">
                 ${totalValue.toLocaleString()}
               </p>
@@ -116,9 +150,11 @@ export default function SponsorOffers() {
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-6 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap
-                  ${activeTab === tab
-                    ? "bg-slate-100 text-slate-950 shadow-lg shadow-white/5"
-                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"}`}
+                  ${
+                    activeTab === tab
+                      ? "bg-slate-100 text-slate-950 shadow-lg shadow-white/5"
+                      : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"
+                  }`}
               >
                 {tab}
               </button>
@@ -145,9 +181,10 @@ export default function SponsorOffers() {
                   </h3>
                 </div>
                 <div
-                  className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border shadow-lg ${darkTypeColors[offer.type] ||
+                  className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border shadow-lg ${
+                    darkTypeColors[offer.type] ||
                     "bg-slate-500/10 text-slate-400 border-slate-500/20"
-                    }`}
+                  }`}
                 >
                   {offer.type}
                 </div>
@@ -157,14 +194,13 @@ export default function SponsorOffers() {
                 <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                   <Calendar size={14} className="text-emerald-500" />
                   <span>
-                    {offer.startDate} <span className="mx-1 text-slate-800">→</span> {offer.endDate}
+                    {offer.startDate}{" "}
+                    <span className="mx-1 text-slate-800">→</span>{" "}
+                    {offer.endDate}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-black tracking-widest">
-                  <BadgeDollarSign
-                    size={16}
-                    className="text-emerald-500"
-                  />
+                  <BadgeDollarSign size={16} className="text-emerald-500" />
                   <span className="text-emerald-400">
                     ${offer.contractValue.toLocaleString()}
                   </span>
@@ -173,12 +209,13 @@ export default function SponsorOffers() {
 
               <div className="flex justify-between items-center mt-auto relative z-10">
                 <span
-                  className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border shadow-inner ${offer.status === "ACCEPTED"
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                    : offer.status === "PENDING"
-                      ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                      : "bg-slate-800 text-slate-500 border-slate-700"
-                    }`}
+                  className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border shadow-inner ${
+                    offer.status === "ACCEPTED"
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      : offer.status === "PENDING"
+                        ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        : "bg-slate-800 text-slate-500 border-slate-700"
+                  }`}
                 >
                   {offer.status}
                 </span>
@@ -191,6 +228,12 @@ export default function SponsorOffers() {
                     <CheckCircle2 size={14} /> Accept Offer
                   </button>
                 )}
+                <button
+                  onClick={() => handleDelete(offer.id)}
+                  className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}
@@ -199,4 +242,3 @@ export default function SponsorOffers() {
     </div>
   );
 }
-

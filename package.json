@@ -2,6 +2,7 @@
   "dependencies": {
     "@clerk/nextjs": "^6.36.0",
     "@heroicons/react": "^2.2.0",
+    "@react-keycloak/web": "^3.4.0",
     "@tailwindcss/postcss": "^4.1.17",
     "chart.js": "^4.5.1",
     "framer-motion": "^12.23.25",

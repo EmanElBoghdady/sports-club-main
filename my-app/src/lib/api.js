@@ -184,7 +184,17 @@ export const api = {
 
     /** 5. Notification & Mail Service **/
     getNotifications: () => apiFetch(`${API_BASE}/notifications`),
+
+    // Messages Endpoints
     getMessages: () => apiFetch(`${API_BASE}/messages`),
+    getMessageById: (id) => apiFetch(`${API_BASE}/messages/${id}`),
+    createMessage: (data) => apiFetch(`${API_BASE}/messages`, { method: "POST", body: JSON.stringify(data) }),
+    updateMessage: (id, data) => apiFetch(`${API_BASE}/messages/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    deleteMessage: (id) => apiFetch(`${API_BASE}/messages/${id}`, { method: "DELETE" }),
+    getMessagesBySender: (keycloakId) => apiFetch(`${API_BASE}/messages/sender/${keycloakId}`),
+    getMessagesByRecipient: (keycloakId) => apiFetch(`${API_BASE}/messages/recipient/${keycloakId}`),
+
+
     getAlerts: () => apiFetch(`${API_BASE}/alerts`),
     getPosts: () => apiFetch(`${API_BASE}/posts`),
     createPost: (data) => apiFetch(`${API_BASE}/posts`, { method: 'POST', body: JSON.stringify(data) }),
@@ -193,6 +203,7 @@ export const api = {
     acknowledgeAlert: (id) => apiFetch(`${API_BASE}/alerts/${id}/acknowledge`, { method: 'POST' }),
     resolveAlert: (id) => apiFetch(`${API_BASE}/alerts/${id}/resolve`, { method: 'POST' }),
     markNotificationRead: (id) => apiFetch(`${API_BASE}/notifications/${id}/read`, { method: 'POST' }),
+
     /** 6. Reports & Analytics Service **/
     getTeamAnalytics: () => apiFetch(`${API_BASE}/team-analytics`),
     getPlayerAnalytics: (id) => apiFetch(`${API_BASE}/player-analytics/${id}`),
@@ -200,7 +211,12 @@ export const api = {
 
 
 
-
+    // Sponsor Offers Endpoints
+    getSponsorOffers: () => apiFetch(`${API_BASE}/sponsor-offers`),
+    getSponsorOfferById: (id) => apiFetch(`${API_BASE}/sponsor-offers/${id}`),
+    createSponsorOffer: (data) => apiFetch(`${API_BASE}/sponsor-offers`, { method: "POST", body: JSON.stringify(data) }),
+    updateSponsorOffer: (id, data) => apiFetch(`${API_BASE}/sponsor-offers/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    deleteSponsorOffer: (id) => apiFetch(`${API_BASE}/sponsor-offers/${id}`, { method: "DELETE"}),
 
 
     // Finance Service

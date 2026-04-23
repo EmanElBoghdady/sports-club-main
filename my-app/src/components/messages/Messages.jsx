@@ -1,57 +1,75 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Search, Plus, Send, Inbox, Mail, Archive, X } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Send,
+  Inbox,
+  Mail,
+  Archive,
+  X,
+  Trash2,
+} from "lucide-react";
+import { api } from "../../lib/api";
 
 export default function Messages() {
   // ======================
-  // Initial Messages
-  // ======================
-  const initialMessages = [
-    {
-      id: 1,
-      sender: "Sports Director",
-      initials: "SD",
-      title: "New Player Transfer Update",
-      preview: "Please review the new player profiles sent by our scouts.",
-      date: "10/30/2025",
-      time: "10:30 AM",
-      unread: true,
-      content: "Please review the new player profiles sent by our scouts.",
-    },
-    {
-      id: 2,
-      sender: "Medical Team",
-      initials: "MT",
-      title: "Injury Report - Erik Hansen",
-      preview: "Erik will need 2 weeks recovery. Full report attached.",
-      date: "10/29/2025",
-      time: "09:10 AM",
-      unread: false,
-      content: "Erik will need 2 weeks recovery. Full report attached.",
-    },
-    {
-      id: 3,
-      sender: "Analyst",
-      initials: "A",
-      title: "Performance Analysis",
-      preview: "Monthly performance report is ready.",
-      date: "10/28/2025",
-      time: "02:15 PM",
-      unread: false,
-      content: "Monthly performance report is ready.",
-    },
-  ];
-
-  // ======================
   // State
   // ======================
-  const [messagesData, setMessagesData] = useState(initialMessages);
+  const [messagesData, setMessagesData] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedMessage, setSelectedMessage] = useState(messagesData[0]);
+  const [selectedMessage, setSelectedMessage] = useState(null);
   const [reply, setReply] = useState("");
   const [showNewMessage, setShowNewMessage] = useState(false);
-  const [newMessage, setNewMessage] = useState({ sender: "", title: "", content: "" });
+  const [newMessage, setNewMessage] = useState({
+    sender: "",
+    title: "",
+    content: "",
+  });
+  const [tab, setTab] = useState("inbox"); // inbox | sent | all
+
+  // Mapping function to convert API message format to UI-friendly format
+
+  const mapMessage = (msg) => ({
+    id: msg.id,
+    sender: msg.senderUserKeycloakId,
+    initials: msg.senderUserKeycloakId?.slice(0, 2).toUpperCase(),
+    title: msg.subject,
+    content: msg.content,
+    preview: msg.content?.slice(0, 60),
+    date: msg.sentAt?.split("T")[0],
+    time: msg.sentAt?.split("T")[1]?.slice(0, 5),
+    unread: msg.readAt == null,
+  });
+
+  useEffect(() => {
+    const loadMessages = async () => {
+      setLoading(true);
+      try {
+        const keycloakId = localStorage.getItem("keycloakId");
+
+        let data = [];
+
+        if (tab === "inbox") {
+          data = await api.getMessagesByRecipient(keycloakId);
+        } else if (tab === "sent") {
+          data = await api.getMessagesBySender(keycloakId);
+        } else if (tab === "all") {
+          data = await api.getAllMessages();
+        }
+
+        const mapped = data.map(mapMessage);
+        setMessagesData(mapped);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadMessages();
+  }, [tab]);
 
   // ======================
   // Search Filter
@@ -65,40 +83,115 @@ export default function Messages() {
   }, [search, messagesData]);
 
   useEffect(() => {
-    if (filteredMessages.length > 0) setSelectedMessage(filteredMessages[0]);
-  }, [search, filteredMessages]);
+    if (filteredMessages.length > 0) {
+      setSelectedMessage(filteredMessages[0]);
+    } else {
+      setSelectedMessage(null);
+    }
+  }, [filteredMessages]);
 
-  const unreadCount = messagesData.filter((m) => m.unread).length;
+  const unreadCount = useMemo(
+    () => messagesData.filter((m) => m.unread).length,
+    [messagesData],
+  );
+
   const readCount = messagesData.length - unreadCount;
 
   // ======================
   // Handlers
   // ======================
-  const handleSendNewMessage = () => {
+  const refreshMessages = async () => {
+    setLoading(true);
+
+    const keycloakId = localStorage.getItem("keycloakId");
+
+    const data =
+      tab === "inbox"
+        ? await api.getMessagesByRecipient(keycloakId)
+        : tab === "sent"
+          ? await api.getMessagesBySender(keycloakId)
+          : await api.getAllMessages();
+
+    setMessagesData(data.map(mapMessage));
+
+    setLoading(false);
+  };
+
+  const handleSendNewMessage = async () => {
     if (!newMessage.sender || !newMessage.title || !newMessage.content) return;
 
-    const now = new Date();
-    const newMsg = {
-      id: messagesData.length + 1,
-      sender: newMessage.sender,
-      initials: newMessage.sender
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase(),
-      title: newMessage.title,
-      preview: newMessage.content.slice(0, 50),
-      date: `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`,
-      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      unread: true,
-      content: newMessage.content,
-    };
+    try {
+      const keycloakId = localStorage.getItem("keycloakId");
 
-    setMessagesData([newMsg, ...messagesData]);
-    setNewMessage({ sender: "", title: "", content: "" });
-    setShowNewMessage(false);
-    setSelectedMessage(newMsg);
+      const payload = {
+        senderUserKeycloakId: keycloak.tokenParsed?.sub, // 👈 أنت
+        recipientUserKeycloakId: newMessage.sender, // 👈 اللي بتبعتله
+        subject: newMessage.title,
+        content: newMessage.content,
+      };
+
+      const created = await api.createMessage(payload);
+
+      const mappedMessage = mapMessage(created); // 🔥 المهم
+
+      setMessagesData((prev) => [mappedMessage, ...prev]);
+      setSelectedMessage({
+        ...mappedMessage,
+        unread: true,
+      });
+      setShowNewMessage(false);
+      setNewMessage({ sender: "", title: "", content: "" });
+
+      await refreshMessages();
+    } catch (err) {
+      console.error("Error sending message", err);
+    }
   };
+
+  const handleSelectMessage = async (msg) => {
+    try {
+      const fullMessage = await api.getMessageById(msg.id);
+
+      setSelectedMessage({
+        ...mapMessage(fullMessage),
+      });
+
+      // update backend
+      await api.updateMessage(msg.id, {
+        ...fullMessage,
+        readAt: new Date().toISOString(),
+      });
+
+
+      await refreshMessages();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api.deleteMessage(id);
+
+      setMessagesData((prev) => prev.filter((m) => m.id !== id));
+
+      if (selectedMessage?.id === id) {
+        setSelectedMessage(null);
+      }
+
+      await refreshMessages();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen text-slate-300">
+        Loading messages...
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-950 min-h-screen p-6 space-y-10 overflow-auto w-full">
@@ -129,15 +222,50 @@ export default function Messages() {
           {/* Search */}
           <div className="relative group">
             <Search
-              size={16}
+              size={10}
               className="absolute left-4 top-3.5 text-slate-500 group-focus-within:text-emerald-500 transition-colors"
             />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search messages..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-11 pr-4 py-3 outline-none text-[10px] font-black uppercase tracking-widest text-slate-100 placeholder:text-slate-600 transition-all focus:border-emerald-500/50"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-11 pr-4 py-3 outline-none text-[10px] font-black  tracking-widest text-slate-100 placeholder:text-slate-400 transition-all focus:border-emerald-500/50"
             />
+          </div>
+
+          <div className="flex gap-3 mb-4">
+            <button
+              onClick={() => setTab("inbox")}
+              className={`text-[10px] font-black uppercase px-4 py-2 rounded-xl border ${
+                tab === "inbox"
+                  ? "bg-emerald-500 text-white"
+                  : "border-slate-700 text-slate-400"
+              }`}
+            >
+              Inbox
+            </button>
+
+            <button
+              onClick={() => setTab("sent")}
+              className={`text-[10px] font-black uppercase px-4 py-2 rounded-xl border ${
+                tab === "sent"
+                  ? "bg-emerald-500 text-white"
+                  : "border-slate-700 text-slate-400"
+              }`}
+            >
+              Sent
+            </button>
+
+            <button
+              onClick={() => setTab("all")}
+              className={`text-[10px] font-black uppercase px-4 py-2 rounded-xl border ${
+                tab === "all"
+                  ? "bg-emerald-500 text-white"
+                  : "border-slate-700 text-slate-400"
+              }`}
+            >
+              All
+            </button>
           </div>
 
           {/* Messages */}
@@ -151,7 +279,7 @@ export default function Messages() {
             {filteredMessages.map((msg) => (
               <div
                 key={msg.id}
-                onClick={() => setSelectedMessage(msg)}
+                onClick={() => handleSelectMessage(msg)}
                 className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 transform border relative overflow-hidden group
                 ${
                   selectedMessage?.id === msg.id
@@ -159,6 +287,16 @@ export default function Messages() {
                     : "border-slate-800/50 bg-slate-950/30 hover:border-slate-700 hover:bg-slate-900/50"
                 }`}
               >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(msg.id);
+                  }}
+                  className="absolute top-3 right-3 z-10 text-slate-600 hover:text-red-500 hover:scale-110 transition-all opacity-0 group-hover:opacity-100"
+                >
+                  <Trash2 size={16} />
+                </button>
+
                 <div className="absolute -right-4 -top-4 w-12 h-12 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all duration-700" />
 
                 <div className="flex justify-between items-start relative z-10">
@@ -372,4 +510,3 @@ export default function Messages() {
     </div>
   );
 }
-
