@@ -49,23 +49,27 @@ export default function UserManagement() {
     const loadUsers = async () => {
         try {
             setLoading(true);
+            const response = await api.getUsers();
 
-            // تنظيف الفلاتر: نبعت الحقل فقط لو فيه قيمة فعلاً
-            const params = {};
-            if (roleFilter !== "ALL") params.role = roleFilter;
-            if (search.trim() !== "") params.firstName = search;
+            let serverData = [];
+            if (response && response.success && Array.isArray(response.data)) {
+                serverData = response.data;
+            }
 
-            // نداء الـ API بالفلاتر "المنظفة"
-            const response = await api.getUsers(params);
+            // دمج البيانات: لو اليوزر اللي كريتناه مش موجود في داتا السيرفر، نحافظ عليه في الـ State
+            setData(prevData => {
+                // لو أول مرة نحمل، خد داتا السيرفر
+                if (prevData.length <= 1) return serverData.length > 0 ? serverData : prevData;
 
-            // تحديث الداتا
-            const finalData = Array.isArray(response) ? response : response.content || response.data || [];
-            setData(finalData);
+                // دمج الذكي: هات اللي في السيرفر + أي يوزر جديد "محلي" لسه مظهرش هناك
+                const serverIds = new Set(serverData.map(u => u.keycloakId || u.id));
+                const localOnly = prevData.filter(u => !serverIds.has(u.keycloakId || u.id));
 
-            console.log("Fetched Data:", finalData); // شوفي في الكونسول هل الأدمن الجديد موجود في المصفوفة؟
+                return [...serverData, ...localOnly];
+            });
+
         } catch (error) {
             console.error("Fetch error:", error);
-            showToast("Failed to fetch users", "error");
         } finally {
             setLoading(false);
         }
@@ -83,35 +87,38 @@ export default function UserManagement() {
     );
 
 
+
+
     const handleSave = async (form) => {
-        // تجهيز الداتا وتحويل الأنواع بدقة لتطابق البوست مان
-        const payload = {
-            ...form,
-
-            age: form.age ? Number(form.age) : 0,
-            experienceYears: form.experienceYears ? Number(form.experienceYears) : 0,
-            favoriteTeamId: form.favoriteTeamId ? Number(form.favoriteTeamId) : 1,
-
-            gender: form.gender?.toUpperCase(),
-            role: form.role?.toUpperCase(),
-            bloodType: form.bloodType?.toUpperCase(),
-        };
-
-        console.log("🚀 Payload being sent to server:", payload);
-
         try {
-            // نداء الأندبوينت الخاص بالأدمن
+            const payload = { ...form, age: Number(form.age), role: form.role?.toUpperCase() };
             const res = await api.adminCreateUser(payload);
-            console.log("✅ Success Response:", res);
-            showToast("User created successfully!");
-            loadUsers();
+
+            if (res.keycloakId) {
+                showToast("User created! Syncing with server...");
+
+                const newUser = {
+                    id: res.id || Date.now(),
+                    keycloakId: res.keycloakId,
+                    firstName: form.firstName,
+                    lastName: form.lastName,
+                    email: form.email,
+                    role: res.role || form.role,
+                    phoneNumber: form.phone || "N/A"
+                };
+
+                // ضيفيه في الأول
+                setData(prev => [newUser, ...prev]);
+
+                // استني 5 ثواني كاملين قبل ما تحاولي تسحبي الداتا من السيرفر
+                setTimeout(() => loadUsers(), 5000);
+            }
+            setShowModal(false);
         } catch (error) {
-            console.error("❌ Request Failed:", error);
-            showToast("Bad Request (400): راجعي البيانات المدخلة", "error");
+            showToast("Save failed", "error");
         }
-        setShowModal(false);
-        setEditItem(null);
     };
+    // ... (باقي كود الـ Render
     // 4. حذف مستخدم
     const handleDelete = async (id) => {
         if (!confirm("Are you sure you want to delete this user?")) return;

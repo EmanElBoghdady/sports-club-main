@@ -147,18 +147,20 @@ export const api = {
     // في ملف api.js
 
     getUsers: (filters = {}) => {
-        // بناء الـ Query String من الفلاتر (لو مفيش فلاتر هيبعت فاضي)
-        const params = new URLSearchParams({
-            firstName: filters.firstName || "",
-            lastName: filters.lastName || "",
-            email: filters.email || "",
-            gender: filters.gender || "",
-            role: filters.role || "",
-            minAge: filters.minAge || "",
-            maxAge: filters.maxAge || ""
-        }).toString();
+        // 1. بناء الـ Query String فقط للحقول اللي ليها قيمة فعلاً
+        const cleanParams = new URLSearchParams();
 
-        return apiFetch(`${API_BASE}/users/search?${params}`);
+        Object.keys(filters).forEach(key => {
+            if (filters[key] && filters[key] !== "ALL") {
+                cleanParams.append(key, filters[key]);
+            }
+        });
+
+        const queryString = cleanParams.toString();
+        // 2. إرسال الـ queryString مع الـ URL
+        const url = queryString ? `${API_BASE}/users?${queryString}` : `${API_BASE}/users`;
+
+        return apiFetch(url);
     },
     getStaff: () => apiFetch(`${API_BASE}/staff`),
     getScouts: () => apiFetch(`${API_BASE}/scouts`),
