@@ -70,7 +70,7 @@ export default function Modal({ open, onClose, onAddPlayer }) {
     };
 
     try {
-      await api.addOuterPlayer(payload);
+      await api.createOuterPlayer(payload);
       if (onAddPlayer) await onAddPlayer();
       handleClose();
       alert("✅ Player Saved!");

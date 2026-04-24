@@ -1,82 +1,127 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FaMagnifyingGlass } from "react-icons/fa6";
-
-const SPORTS_POSITIONS = {
-  Football:   ["Goalkeeper", "Defender", "Midfielder", "Forward", "Winger"],
-  Basketball: ["Point Guard", "Shooting Guard", "Small Forward", "Power Forward", "Center"],
-  Handball:   ["Goalkeeper", "Left Wing", "Right Wing", "Left Back", "Right Back", "Centre Back", "Pivot"],
-  Volleyball: ["Setter", "Outside Hitter", "Opposite Hitter", "Middle Blocker", "Libero"],
-  Swimming:   ["Freestyle", "Backstroke", "Breaststroke", "Butterfly", "Medley"],
-  Tennis:     ["Singles Player", "Doubles Player"],
-};
-
-const STATUSES    = ["Recommended", "Under Review", "Shortlisted", "Rejected"];
-const NATIONALITIES = ["Algerian", "Moroccan", "Tunisian", "Egyptian", "French", "Spanish", "Brazilian", "Argentinian", "American", "Italian", "Other"];
-const STRENGTHS_OPTIONS = ["Speed", "Finishing", "Positioning", "Passing", "Dribbling", "Heading", "Defending", "Leadership", "Vision", "Stamina", "Shooting", "Teamwork", "Agility", "Strength", "Decision Making"];
+import { api } from "@/src/lib/api";
 
 const defaultForm = {
-  name:        "",
-  sport:       "",
-  position:    "",
-  status:      "Under Review",
-  age:         "",
-  club:        "",
-  nationality: "",
-  rating:      5,
-  potential:   5,
-  strengths:   [],
+  scoutKeycloakId: "",
+  outerPlayerId: "",
+  technicalRating: 5,
+  physicalRating: 5,
+  tacticalRating: 5,
+  mentalityRating: 5,
+  strengths: "",
+  weaknesses: "",
+  overallAssessment: "",
+  recommendSigning: false,
 };
 
-export default function ScoutingModal({ open, onClose, onAddReport }) {
-  const [form, setForm]   = useState(defaultForm);
+const RatingSlider = ({ label, field, value, onChange }) => (
+  <div className="flex flex-col gap-1.5">
+    <div className="flex justify-between items-center">
+      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</label>
+      <span className={`text-sm font-black w-8 text-center ${value >= 8 ? "text-emerald-400" : value >= 5 ? "text-amber-400" : "text-red-400"}`}>
+        {value}
+      </span>
+    </div>
+    <input
+      type="range" min={1} max={10} step={1}
+      value={value}
+      onChange={(e) => onChange(field, Number(e.target.value))}
+      className="w-full accent-emerald-500"
+    />
+  </div>
+);
+
+// editData = كائن الريبورت لو إيديت، null لو إضافة جديدة
+export default function ScoutingModal({ open, onClose, onSaved, editData = null }) {
+  const [form, setForm] = useState(defaultForm);
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState(null);
+
+  const isEditMode = !!editData;
+
+  // لما يتفتح المودال في وضع الإيديت، نملأ الفورم بالبيانات القديمة
+  useEffect(() => {
+    if (open && isEditMode) {
+      setForm({
+        scoutKeycloakId: editData.scoutKeycloakId || "",
+        outerPlayerId:   editData.outerPlayerId ?? "",
+        technicalRating: editData.technicalRating ?? 5,
+        physicalRating:  editData.physicalRating ?? 5,
+        tacticalRating:  editData.tacticalRating ?? 5,
+        mentalityRating: editData.mentalityRating ?? 5,
+        strengths:       editData.strengths || "",
+        weaknesses:      editData.weaknesses || "",
+        overallAssessment: editData.overallAssessment || "",
+        recommendSigning:  editData.recommendSigning ?? false,
+      });
+    } else if (open && !isEditMode) {
+      setForm(defaultForm);
+    }
+    setErrors({});
+    setServerError(null);
+  }, [open, editData]);
 
   if (!open) return null;
 
   const set = (key, val) => {
-    setForm(prev => ({ ...prev, [key]: val, ...(key === "sport" ? { position: "" } : {}) }));
-    setErrors(prev => ({ ...prev, [key]: "" }));
+    setForm((prev) => ({ ...prev, [key]: val }));
+    setErrors((prev) => ({ ...prev, [key]: "" }));
+    setServerError(null);
   };
-
-  const toggleStrength = (s) =>
-    set("strengths", form.strengths.includes(s)
-      ? form.strengths.filter(x => x !== s)
-      : form.strengths.length < 5 ? [...form.strengths, s] : form.strengths
-    );
 
   const validate = () => {
     const e = {};
-    if (!form.name.trim()) e.name     = "Name is required";
-    if (!form.sport)       e.sport    = "Select a sport";
-    if (!form.position)    e.position = "Select a position";
-    if (!form.club.trim()) e.club     = "Club is required";
-    if (!form.nationality) e.nationality = "Select nationality";
-    if (!form.age || isNaN(form.age) || +form.age < 14 || +form.age > 45) e.age = "Valid age (14–45)";
-    if (form.strengths.length === 0) e.strengths = "Pick at least one strength";
+    if (!form.scoutKeycloakId.trim()) e.scoutKeycloakId = "Scout ID is required";
+    if (form.outerPlayerId === "" || isNaN(Number(form.outerPlayerId))) e.outerPlayerId = "Valid Player ID required (number)";
+    if (!form.overallAssessment.trim()) e.overallAssessment = "Overall assessment is required";
     return e;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
 
-    const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-    onAddReport?.({
-      id:          Date.now(),
-      ...form,
-      age:         Number(form.age),
-      rating:      Number(form.rating),
-      potential:   Number(form.potential),
-      initials,
-    });
+    setLoading(true);
+    setServerError(null);
+    try {
+      const payload = {
+        scoutKeycloakId:  form.scoutKeycloakId.trim(),
+        outerPlayerId:    Number(form.outerPlayerId),
+        technicalRating:  form.technicalRating,
+        physicalRating:   form.physicalRating,
+        tacticalRating:   form.tacticalRating,
+        mentalityRating:  form.mentalityRating,
+        strengths:        form.strengths.trim(),
+        weaknesses:       form.weaknesses.trim(),
+        overallAssessment: form.overallAssessment.trim(),
+        recommendSigning: form.recommendSigning,
+        createdAt:        editData?.createdAt || new Date().toISOString(),
+      };
 
-    setForm(defaultForm);
-    setErrors({});
-    onClose();
+      if (isEditMode) {
+        await api.updateScoutReport(editData.id, payload);
+      } else {
+        await api.createScoutReport(payload);
+      }
+
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      setServerError(err?.message || "Failed to submit report. Check server connection.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleClose = () => { setForm(defaultForm); setErrors({}); onClose(); };
+  const handleClose = () => {
+    setForm(defaultForm);
+    setErrors({});
+    setServerError(null);
+    onClose();
+  };
 
   const inputCls = (key) =>
     `w-full bg-slate-800/50 border rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none transition-all placeholder:text-slate-600
@@ -96,12 +141,16 @@ export default function ScoutingModal({ open, onClose, onAddReport }) {
 
         {/* Header */}
         <div className="flex items-center gap-3 px-6 pt-5 pb-4 border-b border-slate-800">
-          <div className="bg-emerald-600/20 border border-emerald-500/30 rounded-xl p-2">
-            <FaMagnifyingGlass className="text-emerald-400" size={16} />
+          <div className={`border rounded-xl p-2 ${isEditMode ? "bg-amber-500/20 border-amber-500/30" : "bg-emerald-600/20 border-emerald-500/30"}`}>
+            <FaMagnifyingGlass className={isEditMode ? "text-amber-400" : "text-emerald-400"} size={16} />
           </div>
           <div>
-            <h2 className="font-black text-slate-100 text-lg uppercase tracking-widest">New Scout Report</h2>
-            <p className="text-slate-500 text-xs">Add a new player to scouting database</p>
+            <h2 className="font-black text-slate-100 text-lg uppercase tracking-widest">
+              {isEditMode ? "Edit Scout Report" : "New Scout Report"}
+            </h2>
+            <p className="text-slate-500 text-xs">
+              {isEditMode ? `Editing report #${editData?.id}` : "Submit a player evaluation to the database"}
+            </p>
           </div>
           <button onClick={handleClose} className="ml-auto text-slate-600 hover:text-slate-300 hover:bg-slate-800 rounded-lg p-1.5 transition-all">✕</button>
         </div>
@@ -109,102 +158,83 @@ export default function ScoutingModal({ open, onClose, onAddReport }) {
         {/* Form */}
         <div className="px-6 py-5 grid grid-cols-2 gap-4 max-h-[62vh] overflow-y-auto">
 
-          {/* Name */}
-          <Field label="Full Name *" error={errors.name} full>
-            <input className={inputCls("name")} placeholder="e.g. Youcef Atal" value={form.name} onChange={e => set("name", e.target.value)} />
+          <Field label="Scout Keycloak ID *" error={errors.scoutKeycloakId} full>
+            <input
+              className={inputCls("scoutKeycloakId")}
+              placeholder="e.g. uuid of the scout"
+              value={form.scoutKeycloakId}
+              onChange={(e) => set("scoutKeycloakId", e.target.value)}
+            />
           </Field>
 
-          {/* Sport */}
-          <Field label="Sport *" error={errors.sport}>
-            <select className={inputCls("sport")} value={form.sport} onChange={e => set("sport", e.target.value)}>
-              <option value="">Select sport</option>
-              {Object.keys(SPORTS_POSITIONS).map(s => <option key={s}>{s}</option>)}
-            </select>
+          <Field label="Outer Player ID *" error={errors.outerPlayerId} full>
+            <input
+              type="number"
+              className={inputCls("outerPlayerId")}
+              placeholder="e.g. 42"
+              value={form.outerPlayerId}
+              onChange={(e) => set("outerPlayerId", e.target.value)}
+            />
           </Field>
 
-          {/* Position */}
-          <Field label="Position *" error={errors.position}>
-            <select className={inputCls("position")} value={form.position} onChange={e => set("position", e.target.value)} disabled={!form.sport}>
-              <option value="">Select position</option>
-              {(SPORTS_POSITIONS[form.sport] || []).map(p => <option key={p}>{p}</option>)}
-            </select>
+          <div className="col-span-2 grid grid-cols-2 gap-4">
+            <RatingSlider label="Technical Rating" field="technicalRating" value={form.technicalRating} onChange={set} />
+            <RatingSlider label="Physical Rating"  field="physicalRating"  value={form.physicalRating}  onChange={set} />
+            <RatingSlider label="Tactical Rating"  field="tacticalRating"  value={form.tacticalRating}  onChange={set} />
+            <RatingSlider label="Mentality Rating" field="mentalityRating" value={form.mentalityRating} onChange={set} />
+          </div>
+
+          <Field label="Strengths" full>
+            <input
+              className={inputCls("strengths")}
+              placeholder="e.g. Speed, Vision, Leadership"
+              value={form.strengths}
+              onChange={(e) => set("strengths", e.target.value)}
+            />
           </Field>
 
-          {/* Age */}
-          <Field label="Age *" error={errors.age}>
-            <input type="number" className={inputCls("age")} placeholder="e.g. 21" min={14} max={45} value={form.age} onChange={e => set("age", e.target.value)} />
+          <Field label="Weaknesses" full>
+            <input
+              className={inputCls("weaknesses")}
+              placeholder="e.g. Heading, Stamina"
+              value={form.weaknesses}
+              onChange={(e) => set("weaknesses", e.target.value)}
+            />
           </Field>
 
-          {/* Club */}
-          <Field label="Current Club *" error={errors.club}>
-            <input className={inputCls("club")} placeholder="e.g. AC Roma Youth" value={form.club} onChange={e => set("club", e.target.value)} />
+          <Field label="Overall Assessment *" error={errors.overallAssessment} full>
+            <textarea
+              rows={3}
+              className={`${inputCls("overallAssessment")} resize-none`}
+              placeholder="Write your overall evaluation..."
+              value={form.overallAssessment}
+              onChange={(e) => set("overallAssessment", e.target.value)}
+            />
           </Field>
 
-          {/* Nationality */}
-          <Field label="Nationality *" error={errors.nationality} full>
-            <select className={inputCls("nationality")} value={form.nationality} onChange={e => set("nationality", e.target.value)}>
-              <option value="">Select nationality</option>
-              {NATIONALITIES.map(n => <option key={n}>{n}</option>)}
-            </select>
-          </Field>
+          {/* Recommend Signing Toggle */}
+          <div className="col-span-2 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => set("recommendSigning", !form.recommendSigning)}
+              className={`relative w-12 h-6 rounded-full border-2 transition-all duration-300 ${
+                form.recommendSigning ? "bg-emerald-500/30 border-emerald-500" : "bg-slate-800 border-slate-700"
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-all duration-300 ${
+                form.recommendSigning ? "translate-x-6 bg-emerald-400" : "bg-slate-500"
+              }`} />
+            </button>
+            <span className={`text-xs font-black uppercase tracking-widest ${form.recommendSigning ? "text-emerald-400" : "text-slate-500"}`}>
+              {form.recommendSigning ? "✓ Recommend Signing" : "Do Not Recommend"}
+            </span>
+          </div>
 
-          {/* Status */}
-          <Field label="Status" full>
-            <div className="flex gap-2 flex-wrap">
-              {STATUSES.map(s => (
-                <button key={s} type="button" onClick={() => set("status", s)}
-                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all
-                    ${form.status === s
-                      ? s === "Recommended" ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                      : s === "Shortlisted" ? "bg-blue-500/20 border-blue-500 text-blue-400"
-                      : s === "Rejected"    ? "bg-red-500/20 border-red-500 text-red-400"
-                      :                       "bg-yellow-500/20 border-yellow-500 text-yellow-400"
-                      : "border-slate-800 text-slate-600 hover:border-slate-700"}`}>
-                  {s}
-                </button>
-              ))}
+          {serverError && (
+            <div className="col-span-2 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-xs font-bold">
+              ⚠ {serverError}
             </div>
-          </Field>
-
-          {/* Rating slider */}
-          <Field label="Current Rating" full>
-            <div className="flex items-center gap-4">
-              <input type="range" min={0} max={10} step={0.1} value={form.rating}
-                onChange={e => set("rating", e.target.value)} className="flex-1 accent-amber-500" />
-              <span className={`text-sm font-black w-8 text-center
-                ${+form.rating >= 8 ? "text-emerald-400" : +form.rating >= 6 ? "text-amber-400" : "text-red-400"}`}>
-                {Number(form.rating).toFixed(1)}
-              </span>
-            </div>
-          </Field>
-
-          {/* Potential slider */}
-          <Field label="Potential" full>
-            <div className="flex items-center gap-4">
-              <input type="range" min={0} max={10} step={0.1} value={form.potential}
-                onChange={e => set("potential", e.target.value)} className="flex-1 accent-emerald-500" />
-              <span className={`text-sm font-black w-8 text-center
-                ${+form.potential >= 8 ? "text-emerald-400" : +form.potential >= 6 ? "text-amber-400" : "text-red-400"}`}>
-                {Number(form.potential).toFixed(1)}
-              </span>
-            </div>
-          </Field>
-
-          {/* Strengths */}
-          <Field label={`Key Strengths * (max 5 — ${form.strengths.length}/5)`} error={errors.strengths} full>
-            <div className="flex flex-wrap gap-2">
-              {STRENGTHS_OPTIONS.map(s => (
-                <button key={s} type="button" onClick={() => toggleStrength(s)}
-                  className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border transition-all
-                    ${form.strengths.includes(s)
-                      ? "bg-emerald-500/20 border-emerald-500/60 text-emerald-400"
-                      : "bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-600"}`}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </Field>
-
+          )}
         </div>
 
         {/* Footer */}
@@ -213,9 +243,12 @@ export default function ScoutingModal({ open, onClose, onAddReport }) {
             className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all">
             Cancel
           </button>
-          <button onClick={handleSubmit}
-            className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest active:scale-[0.98] transition-all">
-            Add Report
+          <button onClick={handleSubmit} disabled={loading}
+            className={`flex-1 py-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest active:scale-[0.98] transition-all flex items-center justify-center gap-2
+              ${isEditMode ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}>
+            {loading ? (
+              <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
+            ) : isEditMode ? "Save Changes" : "Submit Report"}
           </button>
         </div>
 
