@@ -21,7 +21,13 @@ export default function DashboardLayout({ children }) {
 
   return (
     <>
-      {/* Sidebar — fixed, independent من الـ scroll */}
+      <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"></link>
+      <link
+        rel='stylesheet'
+        href='https://cdn-uicons.flaticon.com/2.1.0/uicons-regular-rounded/css/uicons-regular-rounded.css'
+      />
+
+      {/* Sidebar — fixed */}
       <div
         className="fixed top-0 left-0 h-screen z-20 transition-all duration-300"
         style={{ width: sidebarWidth }}
@@ -32,7 +38,7 @@ export default function DashboardLayout({ children }) {
         />
       </div>
 
-      {/* Main content — بيبدأ بعد الـ sidebar */}
+      {/* Main content */}
       <div
         className="flex flex-col min-h-screen bg-[var(--bg)] transition-all duration-300"
         style={{ marginLeft: sidebarWidth }}

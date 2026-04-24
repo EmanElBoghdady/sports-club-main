@@ -1,6 +1,7 @@
 import "./globals.css";
 import { PreferencesProvider } from "@/src/context/PreferencesContext";
 
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -20,7 +21,7 @@ export default function RootLayout({ children }) {
         className=" dark:bg-gray-950 transition-colors duration-300 w-full"
       >
         <PreferencesProvider>
-          {children}
+            {children}
         </PreferencesProvider>
       </body>
     </html>

@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { MOCK, ROLES } from "@/src/data/mockData";
+import { useState, useEffect } from "react";
+import { ROLES } from "@/src/data/mockData";
 import { api } from "@/src/lib/api";
 import {
     FormModal, StatusBadge, Avatar, StatCard, PageHeader, AddButton, Toast, EmptyState
@@ -16,18 +16,25 @@ const ROLE_COLORS = {
 };
 
 const fields = [
+    { key: "username", label: "Username", placeholder: "johndoe123" },
+    { key: "email", label: "Email", type: "email", placeholder: "john@club.com" },
+    { key: "password", label: "Password", type: "password", placeholder: "********" }, // مهم جداً
     { key: "firstName", label: "First Name", placeholder: "John" },
     { key: "lastName", label: "Last Name", placeholder: "Doe" },
-    { key: "email", label: "Email", type: "email", placeholder: "john@club.dz" },
-    { key: "phoneNumber", label: "Phone", placeholder: "+213555000" },
-    { key: "dateOfBirth", label: "Date of Birth", type: "date" },
+    { key: "displayName", label: "Display Name", placeholder: "Johnny" },
+    { key: "age", label: "Age", type: "number", placeholder: "25" },
+    { key: "phone", label: "Phone", placeholder: "+213..." },
+    { key: "address", label: "Address", placeholder: "123 Main St" },
     { key: "gender", label: "Gender", type: "select", options: ["MALE", "FEMALE"] },
     { key: "role", label: "Role", type: "select", options: ROLES },
-    { key: "address", label: "Address", placeholder: "123 Main St", full: true },
+    { key: "specialization", label: "Specialization", placeholder: "Goalkeeper Coach" },
+    { key: "experienceYears", label: "Experience Years", type: "number", placeholder: "5" },
+    { key: "bloodType", label: "Blood Type", type: "select", options: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"] },
+    { key: "favoriteTeamId", label: "Favorite Team ID", type: "number", placeholder: "1" },
 ];
-
 export default function UserManagement() {
-    const [data, setData] = useState(MOCK.users);
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState("ALL");
     const [showModal, setShowModal] = useState(false);
@@ -36,30 +43,95 @@ export default function UserManagement() {
 
     const showToast = (msg, type = "success") => setToast({ msg, type });
 
-    const filtered = data.filter(u =>
+    // 1. تحميل البيانات عند فتح الصفحة
+    // داخل صفحة UserManagement.jsx
+
+    const loadUsers = async () => {
+        try {
+            setLoading(true);
+            const response = await api.getUsers();
+
+            let serverData = [];
+            if (response && response.success && Array.isArray(response.data)) {
+                serverData = response.data;
+            }
+
+            // دمج البيانات: لو اليوزر اللي كريتناه مش موجود في داتا السيرفر، نحافظ عليه في الـ State
+            setData(prevData => {
+                // لو أول مرة نحمل، خد داتا السيرفر
+                if (prevData.length <= 1) return serverData.length > 0 ? serverData : prevData;
+
+                // دمج الذكي: هات اللي في السيرفر + أي يوزر جديد "محلي" لسه مظهرش هناك
+                const serverIds = new Set(serverData.map(u => u.keycloakId || u.id));
+                const localOnly = prevData.filter(u => !serverIds.has(u.keycloakId || u.id));
+
+                return [...serverData, ...localOnly];
+            });
+
+        } catch (error) {
+            console.error("Fetch error:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // تأكدي إن الـ useEffect بينادي loadUsers لما الـ roleFilter يتغير
+    useEffect(() => {
+        loadUsers();
+    }, [roleFilter]); // هتعمل إعادة تحميل كل ما تغيري الفلتر
+
+    // 2. البحث والتصفية (Client-side)
+    const filtered = (data || []).filter(u =>
         (roleFilter === "ALL" || u.role === roleFilter) &&
         `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(search.toLowerCase())
     );
 
+
+
+
     const handleSave = async (form) => {
         try {
-            if (editItem) {
-                await api.updateUser(editItem.id, form).catch(() => { });
-                setData(d => d.map(u => u.id === editItem.id ? { ...u, ...form } : u));
-                showToast("User updated");
-            } else {
-                await api.createUser(form).catch(() => { });
-                setData(d => [...d, { ...form, id: Date.now() }]);
-                showToast("User created");
+            const payload = { ...form, age: Number(form.age), role: form.role?.toUpperCase() };
+            const res = await api.adminCreateUser(payload);
+
+            if (res.keycloakId) {
+                showToast("User created! Syncing with server...");
+
+                const newUser = {
+                    id: res.id || Date.now(),
+                    keycloakId: res.keycloakId,
+                    firstName: form.firstName,
+                    lastName: form.lastName,
+                    email: form.email,
+                    role: res.role || form.role,
+                    phoneNumber: form.phone || "N/A"
+                };
+
+                // ضيفيه في الأول
+                setData(prev => [newUser, ...prev]);
+
+                // استني 5 ثواني كاملين قبل ما تحاولي تسحبي الداتا من السيرفر
+                setTimeout(() => loadUsers(), 5000);
             }
-        } catch { showToast("Saved locally", "info"); }
-        setShowModal(false); setEditItem(null);
+            setShowModal(false);
+        } catch (error) {
+            showToast("Save failed", "error");
+        }
+    };
+    // ... (باقي كود الـ Render
+    // 4. حذف مستخدم
+    const handleDelete = async (id) => {
+        if (!confirm("Are you sure you want to delete this user?")) return;
+        try {
+            await api.deleteUser(id);
+            showToast("User deleted from server", "error");
+            loadUsers();
+        } catch (error) {
+            showToast("Error deleting user", "error");
+        }
     };
 
-    const handleDelete = (id) => {
-        setData(d => d.filter(u => u.id !== id));
-        showToast("User deleted", "error");
-    };
+    if (loading) return <div className="p-10 text-emerald-500 font-bold">Connecting to Services...</div>;
 
     return (
         <div className="fade-in">
@@ -132,12 +204,12 @@ export default function UserManagement() {
                                         <div className="flex items-center gap-3">
                                             <button
                                                 onClick={() => { setEditItem(u); setShowModal(true); }}
-                                                className="p-2 rounded-lg text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90"
+                                                className="cursor-pointerp-2 rounded-lg text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90"
                                                 title="Edit"
                                             >✏️</button>
                                             <button
                                                 onClick={() => handleDelete(u.id)}
-                                                className="p-2 rounded-lg text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
+                                                className="cursor-pointer p-2 rounded-lg text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
                                                 title="Delete"
                                             >🗑</button>
                                         </div>

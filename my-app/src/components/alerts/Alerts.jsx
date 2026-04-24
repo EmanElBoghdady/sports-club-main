@@ -1,257 +1,215 @@
-"use client"
-import React, { useState } from "react";
-import { Bell, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+"use client";
+import { useState, useEffect } from "react";
+import { api } from "@/src/lib/api";
+import {
+    FormModal,
+    PageHeader,
+    AddButton,
+    FilterTabs,
+    Toast,
+    EmptyState,
+    StatusBadge
+} from "@/src/components/shared/SharedComponents";
+import { Bell, AlertTriangle, CheckCircle2, Pencil, Trash2, ShieldAlert, CheckSquare } from "lucide-react";
 
-const initialAlerts = [
-  {
-    id: 1,
-    type: "INJURY_REPORTED",
-    title: "Critical Injury Alert",
-    message: "Player Youcef reported with hamstring strain",
-    priority: "HIGH",
-    target: "Medical Team",
-    acknowledged: false,
-    resolved: false,
-  },
-  {
-    id: 2,
-    type: "CONTRACT_EXPIRING",
-    title: "Contract Expiring Soon",
-    message: "Karim Mansouri contract expires in 30 days",
-    priority: "MEDIUM",
-    target: "Team Manager",
-    acknowledged: false,
-    resolved: false,
-  },
+// ─── CONFIG FOR NOTIFICATIONS ──────────────────────────────────────────────
+const notificationFields = [
+    { key: "recipientUserKeycloakId", label: "Recipient ID", placeholder: "string", required: true },
+    { key: "title", label: "Title", required: true },
+    { key: "message", label: "Message", required: true, full: true },
+    { key: "notificationType", label: "Type", type: "select", options: ["IN_APP", "EMAIL", "SMS"], required: true },
+    { key: "category", label: "Category", type: "select", options: ["INJURY", "TRAINING", "MATCH", "ADMIN", "FINANCE"], required: true },
+    { key: "status", label: "Status", type: "select", options: ["PENDING", "SENT", "FAILED"], required: true },
+    { key: "emailSubject", label: "Email Subject" },
+    { key: "emailBody", label: "Email Body", full: true },
+    { key: "relatedEntityType", label: "Related Entity Type" },
+    { key: "relatedEntityId", label: "Related Entity ID", type: "number" },
+    { key: "actionUrl", label: "Action URL" },
 ];
 
-const initialNotifications = [
-  {
-    id: 1,
-    title: "Match Scheduled",
-    message: "Blue Stars FC vs Red Lions FC scheduled for Nov 2",
-    category: "MATCH_REMINDER",
-    status: "UNREAD",
-  },
-  {
-    id: 2,
-    title: "Injury Report",
-    message: "Player #6 reported injury during training",
-    category: "INJURY",
-    status: "READ",
-  },
+// ─── CONFIG FOR ALERTS (NEW SCHEMA) ────────────────────────────────────────
+const alertFields = [
+    { key: "targetUserKeycloakId", label: "Target User ID", placeholder: "string", required: true },
+    { key: "targetRole", label: "Target Role", placeholder: "e.g. COACH" },
+    { key: "title", label: "Alert Title", required: true },
+    { key: "message", label: "Short Message", required: true },
+    { key: "description", label: "Full Description", required: true, full: true },
+    { key: "alertType", label: "Alert Type", type: "select", options: ["SYSTEM", "SECURITY", "MAINTENANCE", "ANNOUNCEMENT"], required: true },
+    { key: "priority", label: "Priority", type: "select", options: ["LOW", "MEDIUM", "HIGH", "CRITICAL"], required: true },
+    { key: "relatedEntityType", label: "Related Entity Type" },
+    { key: "relatedEntityId", label: "Related Entity ID", type: "number" },
+    { key: "actionRequired", label: "Action Required" },
+    { key: "metadata", label: "Metadata (JSON/String)", full: true },
 ];
 
-export default function Alerts() {
-  const [tab, setTab] = useState("alerts");
-  const [search, setSearch] = useState("");
-  const [alerts, setAlerts] = useState(initialAlerts);
-  const [notifications, setNotifications] = useState(initialNotifications);
+export default function CommunicationsPage() {
+    const [mainTab, setMainTab] = useState("notifications"); // notifications | alerts
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [showModal, setShowModal] = useState(false);
+    const [editItem, setEditItem] = useState(null);
+    const [toast, setToast] = useState(null);
 
-  const filteredAlerts = alerts.filter(alert =>
-    alert.title.toLowerCase().includes(search.toLowerCase()) ||
-    alert.message.toLowerCase().includes(search.toLowerCase())
-  );
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const res = mainTab === "notifications" ? await api.getNotifications() : await api.getAlerts();
+            let finalData = [];
+            if (Array.isArray(res)) finalData = res;
+            else if (res?.content) finalData = res.content;
+            else if (res?.data) finalData = res.data;
+            setData(finalData);
+        } catch (err) {
+            setToast({ msg: "Failed to load data", type: "error" });
+        } finally { setLoading(false); }
+    };
 
-  const filteredNotifications = notifications.filter(notif =>
-    notif.title.toLowerCase().includes(search.toLowerCase()) ||
-    notif.message.toLowerCase().includes(search.toLowerCase())
-  );
+    useEffect(() => { fetchData(); }, [mainTab]);
 
-  const acknowledgeAlert = (id) => {
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, acknowledged: true } : a))
-    );
-  };
+    const handleSave = async (form) => {
+        try {
+            let payload;
+            if (mainTab === "notifications") {
+                payload = {
+                    // 1. تأكدي إن الحقول دي مطابقة للـ Swagger بالظبط (كابيتال وسمول)
+                    recipientUserKeycloakId: "a0cdb123-6783-4f09-95bb-bd07d0058285",
+                    notificationType: "IN_APP",     // جربي قيمة ثابتة بسيطة الأول
+                    category: "ADMIN",              // جربي ADMIN بدل TRAINING
+                    status: "PENDING",              // الحالة الابتدائية دايماً أضمن
+                    title: form.title || "Default Title",
+                    message: form.message || "Default Message",
 
-  const resolveAlert = (id) => {
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, resolved: true } : a))
-    );
-  };
+                    // 2. الحقول اللي ممكن تكون عاملة أزمة (الـ Numbers والـ Nulls)
+                    relatedEntityId: Number(form.relatedEntityId) || 0, // لازم يكون رقم
+                    relatedEntityType: "GENERAL",   // بلاش null، حطي كلمة تدل على النوع
 
-  const markNotificationRead = (id) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, status: "READ" } : n))
-    );
-  };
+                    // 3. الحقول الاختيارية (لو السيرفر مش طالبها، بلاش نبعتها خالص أو نبعتها String)
+                    emailSubject: form.emailSubject || "No Subject",
+                    emailBody: form.emailBody || "No Body",
+                    actionUrl: form.actionUrl || "http://localhost:3000"
+                };
+            } else {
+                // Alert Payload (Your NEW Schema) - تظبيط الـ Enums والـ Numbers
+                payload = {
+                    targetUserKeycloakId: form.targetUserKeycloakId || "string",
+                    targetRole: form.targetRole || "ROLE_USER", // يفضل قيمة افتراضية منطقية
+                    title: form.title || "",
+                    message: form.message || "",
+                    description: form.description || "",
+                    alertType: (form.alertType || "SYSTEM").toUpperCase(),
+                    priority: (form.priority || "LOW").toUpperCase(),
+                    relatedEntityId: Number(form.relatedEntityId || 0),
+                    relatedEntityType: form.relatedEntityType ? String(form.relatedEntityType).toUpperCase() : "GENERAL",
+                    actionRequired: form.actionRequired || null,
+                    metadata: form.metadata || null
+                };
+            }
+            console.log(`Sending ${mainTab} Payload:`, payload);
 
-  const criticalCount = alerts.filter((a) => a.priority === "HIGH").length;
-  const unreadNotifs = notifications.filter((n) => n.status === "UNREAD").length;
+            if (editItem) {
+                mainTab === "notifications"
+                    ? await api.updateNotification(editItem.id, payload)
+                    : await api.updateAlert(editItem.id, payload);
+                setToast({ msg: "Updated Successfully!" });
+            } else {
+                mainTab === "notifications"
+                    ? await api.createNotification(payload)
+                    : await api.createAlert(payload);
+                setToast({ msg: "Created Successfully!" });
+            }
+            setShowModal(false);
+            setEditItem(null);
+            fetchData();
+        } catch (err) {
+            setToast({ msg: err.message, type: "error" });
+        }
+    };
 
-  return (
-    <div className="w-full h-full bg-slate-950 p-6 overflow-y-auto">
-      <div className="max-w-6xl mx-auto space-y-10">
-        {/* Header / stats */}
-        <div className="flex flex-col sm:flex-row justify-between gap-6 fade-in">
-          <div>
-            <h1 className="text-4xl font-black text-slate-100 tracking-tight mb-2">
-              Alerts & Notifications
-            </h1>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] leading-none">
-              System alerts, player health warnings and match reminders
-            </p>
-          </div>
+    const handleAction = async (id, action) => {
+        try {
+            console.log(`Executing ${action} on ID: ${id}`);
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-900/50 rounded-2xl px-6 py-4 border border-slate-800 shadow-xl min-w-[140px]">
-              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Critical alerts</p>
-              <p className="text-xl font-black text-rose-500 tracking-tight">{criticalCount}</p>
-            </div>
-            <div className="bg-slate-900/50 rounded-2xl px-6 py-4 border border-slate-800 shadow-xl min-w-[140px]">
-              <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Unread</p>
-              <p className="text-xl font-black text-emerald-500 tracking-tight">
-                {unreadNotifs}
-              </p>
-            </div>
-          </div>
-        </div>
+            if (action === "read") await api.markNotificationRead(id);
+            else if (action === "resolve") await api.resolveAlert(id);
+            else if (action === "acknowledge") await api.acknowledgeAlert(id);
 
-        {/* Filter Bar */}
-        <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 shadow-2xl">
-          <div className="relative w-full md:w-96 group">
-            <i className="fi fi-rr-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors"></i>
-            <input
-              type="text"
-              placeholder="Search alerts or notifications..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3.5 pl-14 pr-6 text-slate-200 text-[10px] font-black uppercase tracking-widest placeholder:text-slate-700 focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all"
+            setToast({ msg: `${action} successful!` });
+            fetchData();
+        } catch (err) {
+            console.error(`Action ${action} failed:`, err);
+            setToast({ msg: "Action failed: Check server console", type: "error" });
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!confirm("Delete this record?")) return;
+        try {
+            mainTab === "notifications" ? await api.deleteNotification(id) : await api.deleteAlert(id);
+            fetchData();
+        } catch (err) { setToast({ msg: "Delete failed", type: "error" }); }
+    };
+
+    return (
+        <div className="w-full h-full bg-slate-950 p-6 overflow-y-auto fade-in text-slate-200">
+            <PageHeader
+                title={mainTab === "notifications" ? "Notifications" : "System Alerts"}
+                subtitle={`Manage and track all ${mainTab}`}
+                action={<AddButton label={`+ New ${mainTab === "notifications" ? "Notification" : "Alert"}`} onClick={() => { setEditItem(null); setShowModal(true); }} />}
             />
-          </div>
 
-          {/* Tabs */}
-          <div className="inline-flex bg-slate-950/50 p-1.5 rounded-2xl border border-slate-800/50">
-            <button
-              onClick={() => setTab("alerts")}
-              className={`px-8 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center gap-2 transition-all duration-300
-                ${tab === "alerts"
-                  ? "bg-slate-100 text-slate-950 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                  : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"}`}
-            >
-              <Bell size={14} />
-              Alerts
-            </button>
-            <button
-              onClick={() => setTab("notifications")}
-              className={`px-8 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center gap-2 transition-all duration-300
-                ${tab === "notifications"
-                  ? "bg-slate-100 text-slate-950 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                  : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"}`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${unreadNotifs > 0 ? "bg-emerald-500 animate-pulse" : "bg-slate-600"}`} />
-              Notifications
-            </button>
-          </div>
+            <FilterTabs
+                tabs={[["notifications", "📨 Notifications"], ["alerts", "⚠️ System Alerts"]]}
+                active={mainTab} onSelect={setMainTab}
+            />
+
+            <div className="space-y-3">
+                {loading ? <div className="p-20 text-center animate-pulse text-slate-500 uppercase tracking-widest">Loading...</div> : (
+                    <>
+                        {data.map(item => (
+                            <div key={item.id} className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl flex items-center justify-between group hover:border-emerald-500/30 transition-all">
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-2.5 rounded-xl border border-white/5 shadow-inner ${mainTab === 'notifications' ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10'}`}>
+                                        {mainTab === 'notifications' ? <Bell size={18} /> : <AlertTriangle size={18} />}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <h4 className="font-bold text-slate-100 text-sm">{item.title}</h4>
+                                            <StatusBadge status={item.category || item.priority} />
+                                            <span className="text-[10px] text-slate-600 font-mono">#{item.id}</span>
+                                        </div>
+                                        <p className="text-xs text-slate-400 line-clamp-1">{item.message || item.description}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {mainTab === "notifications" && (
+                                        <button onClick={() => handleAction(item.id, "read")} className="p-2 text-slate-500 hover:text-emerald-400 transition-colors" title="Mark Read"><CheckCircle2 size={16} /></button>
+                                    )}
+                                    {mainTab === "alerts" && (
+                                        <>
+                                            <button onClick={() => handleAction(item.id, "acknowledge")} className="p-2 text-slate-500 hover:text-blue-400 transition-colors" title="Acknowledge"><CheckSquare size={16} /></button>
+                                            <button onClick={() => handleAction(item.id, "resolve")} className="p-2 text-slate-500 hover:text-emerald-400 transition-colors" title="Resolve"><ShieldAlert size={16} /></button>
+                                        </>
+                                    )}
+                                    <button onClick={() => { setEditItem(item); setShowModal(true); }} className="p-2 text-slate-500 hover:text-amber-400 transition-colors"><Pencil size={16} /></button>
+                                    <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-500 hover:text-rose-400 transition-colors"><Trash2 size={16} /></button>
+                                </div>
+                            </div>
+                        ))}
+                        {data.length === 0 && <EmptyState icon={mainTab === 'notifications' ? "📭" : "🛡️"} title={`No ${mainTab} found`} />}
+                    </>
+                )}
+            </div>
+
+            {showModal && (
+                <FormModal
+                    title={`${editItem ? "Edit" : "New"} ${mainTab === "notifications" ? "Notification" : "Alert"}`}
+                    fields={mainTab === "notifications" ? notificationFields : alertFields}
+                    initialData={editItem}
+                    onSubmit={handleSave}
+                    onClose={() => { setShowModal(false); setEditItem(null); }}
+                />
+            )}
+            {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
         </div>
-
-        {/* Content */}
-        {tab === "alerts" ? (
-          <div className="space-y-4">
-            {filteredAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className={`bg-slate-900/50 backdrop-blur-sm rounded-2xl p-6 border transition-all group relative overflow-hidden flex justify-between gap-6
-                  ${alert.priority === "HIGH" ? "border-rose-500/30" : "border-amber-500/30"} 
-                  ${alert.resolved ? "opacity-40 grayscale" : "hover:border-slate-700"}`}
-              >
-                <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all duration-700" />
-
-                <div className="flex gap-4 relative z-10">
-                  <div className={`mt-1 p-3 rounded-xl shadow-xl border
-                    ${alert.priority === "HIGH"
-                      ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                      : "bg-amber-500/10 text-amber-500 border-amber-500/20"}`}>
-                    {alert.priority === "HIGH" ? <AlertTriangle size={20} /> : <Bell size={20} />}
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-sm font-black text-slate-100 uppercase tracking-tight group-hover:text-emerald-400 transition-colors">
-                        {alert.title}
-                      </h3>
-                      <span className="text-[9px] px-3 py-1 rounded-full bg-slate-950 border border-slate-800 text-slate-500 font-black uppercase tracking-widest">
-                        {alert.type.replace(/_/g, " ")}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 font-medium leading-relaxed max-w-xl group-hover:text-slate-300 transition-colors">
-                      {alert.message}
-                    </p>
-                    <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-4">
-                      Target: <span className="text-slate-400 group-hover:text-emerald-500 transition-colors">{alert.target}</span>
-                    </p>
-
-                    <div className="flex gap-3 mt-4">
-                      {alert.acknowledged && (
-                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/5">
-                          <CheckCircle2 size={12} /> Acknowledged
-                        </span>
-                      )}
-                      {alert.resolved && (
-                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-slate-600 border border-slate-800 text-[9px] font-black uppercase tracking-widest">
-                          <XCircle size={12} /> Resolved
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {!alert.resolved && (
-                  <div className="flex flex-col gap-3 items-end relative z-10">
-                    {!alert.acknowledged && (
-                      <button
-                        onClick={() => acknowledgeAlert(alert.id)}
-                        className="px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl border border-slate-800 text-slate-500 hover:border-emerald-500/50 hover:bg-emerald-500/5 hover:text-white transition-all duration-300"
-                      >
-                        Acknowledge
-                      </button>
-                    )}
-                    <button
-                      onClick={() => resolveAlert(alert.id)}
-                      className="px-6 py-2.5 text-[9px] font-black uppercase tracking-widest rounded-xl bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-600 hover:text-white transition-all shadow-lg shadow-emerald-500/10 active:scale-95"
-                    >
-                      Resolve
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredNotifications.map((n) => (
-              <div
-                key={n.id}
-                className={`bg-slate-900/50 backdrop-blur-sm rounded-2xl p-6 border transition-all flex justify-between items-center group relative overflow-hidden
-                  ${n.status === "UNREAD" ? "border-emerald-500/30" : "border-slate-800 opacity-60 hover:opacity-100 hover:border-slate-700"}`}
-              >
-                <div className="absolute -right-10 -top-10 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all duration-700" />
-
-                <div className="relative z-10 w-full">
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-600 mb-2 group-hover:text-emerald-500 transition-colors">
-                    {n.category.replace(/_/g, " ")}
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-black text-slate-100 uppercase tracking-tight group-hover:text-emerald-400 transition-colors">
-                      {n.title}
-                    </h3>
-                  </div>
-                  <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed max-w-2xl">{n.message}</p>
-                </div>
-
-                {n.status === "UNREAD" && (
-                  <button
-                    onClick={() => markNotificationRead(n.id)}
-                    className="relative z-10 px-5 py-2.5 text-[9px] font-black uppercase tracking-widest rounded-xl bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-600 hover:text-white transition-all shadow-lg shadow-emerald-500/10 active:scale-95 whitespace-nowrap ml-6"
-                  >
-                    Mark read
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
 }

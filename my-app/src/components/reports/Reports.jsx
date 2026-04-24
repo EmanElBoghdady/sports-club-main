@@ -1,374 +1,287 @@
 "use client"
-import React from "react";
-import {
-  FileText,
-  Calendar,
-  Download,
-  TrendingUp,
-  Eye,
-  Users,
-  Activity,
-  DollarSign,
-} from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { FileText, Calendar, Download, TrendingUp, Eye, Users, Activity, DollarSign, Pencil, Trash2 } from "lucide-react";
+import { api } from "@/src/lib/api";
+import ScoutingModal from "@/src/components/scouting/ScoutingModal";
 
-/* =========================
-   Stats Data
-========================= */
-const stats = [
-  { title: "Total Reports", value: "48", icon: FileText, bg: "bg-blue-100", color: "text-blue-600" },
-  { title: "This Month", value: "6", icon: Calendar, bg: "bg-green-100", color: "text-green-600" },
-  { title: "Downloads", value: "234", icon: Download, bg: "bg-purple-100", color: "text-purple-600" },
-  { title: "Categories", value: "6", icon: TrendingUp, bg: "bg-yellow-100", color: "text-yellow-600" },
-];
+const iconMap = {
+  Performance: TrendingUp,
+  Development: Users,
+  Medical:     Activity,
+  Financial:   DollarSign,
+  Scouting:    Eye,
+  Analytics:   TrendingUp,
+};
 
-/* =========================
-   Reports Data
-========================= */
-const initialReports = [
-  {
-    category: "Performance",
-    title: "Q4 2025 Performance Report",
-    desc: "Comprehensive analysis of team performance across all sports",
-    date: "10/25/2025",
-    size: "2.4 MB",
-    icon: Activity,
-  },
-  {
-    category: "Development",
-    title: "Player Development Report - October",
-    desc: "Individual player progress and training effectiveness",
-    date: "10/20/2025",
-    size: "1.8 MB",
-    icon: Users,
-  },
-  {
-    category: "Medical",
-    title: "Medical & Injury Analysis",
-    desc: "Health trends and injury prevention insights",
-    date: "10/18/2025",
-    size: "1.2 MB",
-    icon: FileText,
-  },
-  {
-    category: "Financial",
-    title: "Financial Summary - October 2025",
-    desc: "Revenue, expenses, and budget analysis",
-    date: "10/15/2025",
-    size: "3.1 MB",
-    icon: DollarSign,
-  },
-  {
-    category: "Scouting",
-    title: "Scouting & Recruitment Report",
-    desc: "Talent acquisition and trial results",
-    date: "10/12/2025",
-    size: "2.7 MB",
-    icon: Eye,
-  },
-  {
-    category: "Analytics",
-    title: "Match Analytics - Last 10 Games",
-    desc: "Tactical analysis and performance metrics",
-    date: "10/10/2025",
-    size: "4.5 MB",
-    icon: TrendingUp,
-  },
-];
+const safeArray = (data) => Array.isArray(data) ? data : (data?.content || []);
 
-const categories = [
-  { name: "Performance", icon: TrendingUp },
-  { name: "Development", icon: Users },
-  { name: "Medical", icon: FileText },
-  { name: "Financial", icon: FileText },
-  { name: "Scouting", icon: Eye },
-  { name: "Analytics", icon: Activity },
-];
+// ── Helper: بيحدد الـ API calls الصح بناءً على نوع الريبورت ──────────────
+const getApiActions = (category) => {
+  switch (category) {
+    case "Scouting":  return { update: api.updateScoutReport,   del: api.deleteScoutReport };
+    case "Analytics": return { update: api.updateTeamAnalytics, del: api.deleteTeamAnalytics };
+    case "Match":     return { update: api.updateMatchAnalysis,  del: api.deleteMatchAnalysis };
+    default:          return { update: api.updateTeamAnalytics, del: api.deleteTeamAnalytics };
+  }
+};
 
-/* =========================
-   Main Component
-========================= */
 export default function ReportsPage() {
-  const [search, setSearch] = React.useState("");
-  const [activeTab, setActiveTab] = React.useState("All");
-  const [reports, setReports] = React.useState(initialReports);
+  const [search, setSearch]         = useState("");
+  const [activeTab, setActiveTab]   = useState("All");
+  const [reports, setReports]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [showScoutModal, setShowScoutModal] = useState(false);
+  const [editReport, setEditReport] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
-  // Modal state
-  const [modalOpen, setModalOpen] = React.useState(false);
-  const [editingIndex, setEditingIndex] = React.useState(null);
-  const [formData, setFormData] = React.useState({
-    category: "",
-    title: "",
-    desc: "",
-    date: "",
-    size: "",
-  });
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const fetchReports = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [teamData, matchData, scoutData] = await Promise.all([
+        api.getTeamAnalytics().catch(() => []),
+        api.getMatchAnalyses().catch(() => []),
+        api.getScoutReports().catch(() => []),
+      ]);
 
-  const openModal = (report = null, index = null) => {
-    if (report) {
-      setFormData({ ...report });
-      setEditingIndex(index);
-    } else {
-      setFormData({ category: "", title: "", desc: "", date: "", size: "" });
-      setEditingIndex(null);
+      const mappedTeam = safeArray(teamData).map(t => ({
+        ...t, _raw: t, _source: "team",
+        category: "Analytics",
+        title: t.title || t.analysisTitle || t.teamName || `Team Analytics #${t.id}`,
+        desc:  t.description || t.notes || t.summary || "Team performance analytics report.",
+        createdAt: t.createdAt || Date.now(),
+      }));
+
+      const mappedMatch = safeArray(matchData).map(m => ({
+        ...m, _raw: m, _source: "match",
+        category: "Match",
+        title: m.title || m.analysisTitle || m.matchTitle || `Match Analysis #${m.id}`,
+        desc:  m.description || m.notes || m.summary || "Match performance analysis report.",
+        createdAt: m.createdAt || Date.now(),
+      }));
+
+      const mappedScout = safeArray(scoutData).map(s => ({
+        ...s, _raw: s, _source: "scout",
+        category: "Scouting",
+        title: s.title || s.playerName || `Scout Report #${s.id}`,
+        desc:  s.overallAssessment || s.notes || "Detailed scouting analysis.",
+        createdAt: s.reportDate || s.createdAt || Date.now(),
+      }));
+
+      const combined = [...mappedTeam, ...mappedMatch, ...mappedScout].map(item => ({
+        ...item,
+        icon: iconMap[item.category] || FileText,
+        date: new Date(item.createdAt || Date.now()).toLocaleDateString(),
+        size: item.fileSize || "1.5 MB",
+      }));
+
+      setReports(combined);
+    } catch (err) {
+      console.error("Reports Fetch Error:", err);
+    } finally {
+      setLoading(false);
     }
-    setModalOpen(true);
-  };
+  }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  useEffect(() => { fetchReports(); }, [fetchReports]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (editingIndex !== null) {
-      const updated = [...reports];
-      updated[editingIndex] = { ...formData, icon: reports[editingIndex].icon };
-      setReports(updated);
-    } else {
-      setReports([...reports, { ...formData, icon: Activity }]); // default icon
+  // ── Delete ─────────────────────────────────────────────────────────────────
+  const handleDelete = async (report) => {
+    if (!confirm(`Delete "${report.title}"?`)) return;
+    setDeletingId(report.id);
+    try {
+      const { del } = getApiActions(report.category);
+      await del(report.id);
+      await fetchReports();
+    } catch (err) {
+      alert("Failed to delete: " + (err?.message || "Server error"));
+    } finally {
+      setDeletingId(null);
     }
-    setModalOpen(false);
   };
 
-  // ----------------------
-  // Download Functionality
-  // ----------------------
-  const handleDownload = (report) => {
-    const content = `
-Report Title: ${report.title}
-Category: ${report.category}
-Description: ${report.desc}
-Date: ${report.date}
-Size: ${report.size}
-    `;
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${report.title.replace(/\s/g, "_")}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  // ── Edit ───────────────────────────────────────────────────────────────────
+  const handleEdit = (report) => {
+    // بس Scouting عنده مودال مخصص، الباقي مش عندنا مودال edit ليهم دلوقتي
+    if (report.category === "Scouting") {
+      setEditReport(report._raw || report);
+      setShowScoutModal(true);
+    }
   };
 
-  const filteredReports = reports.filter((report) => {
-    const matchesSearch =
-      report.title.toLowerCase().includes(search.toLowerCase()) ||
-      report.desc.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = activeTab === "All" || report.category === activeTab;
+  // ── Filters ────────────────────────────────────────────────────────────────
+  const filteredReports = reports.filter(r => {
+    const matchesSearch = r.title?.toLowerCase().includes(search.toLowerCase());
+    const matchesTab    = activeTab === "All" || r.category === activeTab;
     return matchesSearch && matchesTab;
   });
 
-  return (
-    <div className="bg-slate-950 min-h-screen p-6 overflow-y-auto w-full">
-      <div className="max-w-7xl mx-auto space-y-10">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 fade-in">
-          <div>
-            <h1 className="text-4xl font-black text-slate-100 tracking-tight mb-2">
-              Reports & Documents
-            </h1>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] leading-none">
-              Access and download official reports
-            </p>
-          </div>
+  const categories = ["All", ...new Set(reports.map(r => r.category))];
 
-          <div className="flex gap-4">
-            <button
-              onClick={() => openModal()}
-              className="px-6 py-3 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-600 hover:text-white transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/10 active:scale-95"
-            >
-              Generate Report
-            </button>
-            <button className="px-6 py-3 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-600 hover:text-white transition-all duration-300 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/10 active:scale-95">
-              Export PDF
-            </button>
+  return (
+    <div className="bg-[#030712] min-h-screen p-6 lg:p-10 overflow-y-auto w-full fade-in">
+      <div className="max-w-7xl mx-auto space-y-10">
+
+        {/* ── Header ───────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+          <div>
+            <h1 className="text-4xl font-black text-white tracking-tight mb-2">Reports & Analytics</h1>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Official insights and statistics</p>
           </div>
+          <button
+            onClick={() => { setEditReport(null); setShowScoutModal(true); }}
+            className="px-6 py-3 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-900/20">
+            + New Scout Report
+          </button>
         </div>
 
-        {/* Filter Bar */}
-        <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 mb-10 shadow-2xl">
-          <div className="relative w-full md:w-96 group">
-            <i className="fi fi-rr-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors"></i>
-            <input
-              type="text"
-              placeholder="Search reports..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3.5 pl-14 pr-6 text-slate-200 text-[10px] font-black uppercase tracking-widest placeholder:text-slate-700 focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all"
-            />
-          </div>
+        {/* ── Stats Grid ───────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { title: "Total Reports",    value: reports.length,                                          icon: FileText,   color: "text-white" },
+            { title: "Team Analytics",   value: reports.filter(r => r.category === "Analytics").length,  icon: TrendingUp, color: "text-blue-400" },
+            { title: "Match Analyses",   value: reports.filter(r => r.category === "Match").length,      icon: Activity,   color: "text-rose-400" },
+            { title: "Scouting Reports", value: reports.filter(r => r.category === "Scouting").length,   icon: Eye,        color: "text-amber-400" },
+          ].map((stat, i) => (
+            <div key={i} className="bg-[#0a0f1d] rounded-[2rem] px-6 py-6 border border-white/5 shadow-2xl relative overflow-hidden group">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 relative z-10">{stat.title}</p>
+              <p className={`text-3xl font-black tracking-tight relative z-10 ${stat.color}`}>{stat.value}</p>
+              <div className="absolute -right-4 -bottom-4 text-white/[0.02] group-hover:text-emerald-500/10 transition-colors duration-500">
+                <stat.icon size={80} />
+              </div>
+            </div>
+          ))}
+        </div>
 
-          <div className="flex bg-slate-950/50 p-1.5 rounded-2xl border border-slate-800/50 overflow-x-auto no-scrollbar w-full md:w-auto">
-            {["All", "Performance", "Medical", "Financial", "Scouting"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-6 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap
-                  ${activeTab === tab
-                    ? "bg-slate-100 text-slate-950 shadow-lg shadow-white/5"
-                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"}`}
-              >
-                {tab}
+        {/* ── Search + Filters ─────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search reports..."
+            className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-300 placeholder:text-slate-600 outline-none focus:border-emerald-500/50 transition-all w-64"
+          />
+          <div className="flex gap-2 p-1.5 bg-slate-950/50 border border-slate-800 rounded-xl flex-wrap">
+            {categories.map(cat => (
+              <button key={cat} onClick={() => setActiveTab(cat)}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === cat
+                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-950"
+                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"
+                }`}>
+                {cat}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
-            <div key={index} className="bg-slate-900/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-800 hover:border-emerald-500/30 transition-all group relative overflow-hidden">
-              <div className="flex justify-between items-center relative z-10">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{stat.title}</p>
-                  <h3 className="text-2xl font-black text-slate-100 tracking-tight">{stat.value}</h3>
-                </div>
-                <div className={`p-3 rounded-xl bg-slate-950 border border-slate-800 text-emerald-500 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/30 transition-all`}>
-                  <stat.icon size={20} />
-                </div>
-              </div>
-              <div className="absolute -right-2 -bottom-2 w-16 h-16 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all duration-500" />
-            </div>
-          ))}
-        </div>
+        {/* ── Cards ────────────────────────────────────────────────────────── */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-slate-600 gap-4">
+            <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Compiling Reports...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 mt-4">
+            {filteredReports.map((report, index) => {
+              const IconComponent = report.icon || FileText;
+              const isDeleting    = deletingId === report.id;
+              const isScout       = report.category === "Scouting";
+              const uniqueKey     = `${report.category ?? "report"}-${report.id ?? "x"}-${index}`;
 
-        {/* Reports Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredReports.map((report, index) => {
-            const Icon = report.icon;
-            return (
-              <div
-                key={index}
-                className="bg-slate-900/50 backdrop-blur-sm border border-slate-800 border-l-4 border-l-emerald-500 rounded-2xl shadow-sm hover:border-slate-700 transition-all p-6 flex flex-col justify-between group relative overflow-hidden"
-              >
-                <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all duration-700" />
+              return (
+                <div key={uniqueKey}
+                  className="bg-[#0a0f1d] border border-white/5 rounded-[2.5rem] p-6 hover:border-emerald-500/30 transition-all shadow-2xl group relative overflow-hidden flex flex-col h-full">
 
-                {/* Badge + Icon */}
-                <div className="flex justify-between items-start mb-6 relative z-10">
-                  <span
-                    className={`text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-widest border border-emerald-500/20 bg-emerald-500/10 text-emerald-400`}
-                  >
-                    {report.category}
-                  </span>
+                  {/* ── Badge + Actions ── */}
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full border shadow-lg bg-emerald-500/10 text-emerald-400 border-emerald-500/20 z-10">
+                      {report.category}
+                    </div>
 
-                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-slate-400 group-hover:text-emerald-500 transition-colors">
-                    <Icon size={18} />
-                  </div>
-                </div>
+                    <div className="flex items-center gap-2 z-10">
+                      {/* ✏️ Edit — فقط Scouting عنده مودال مخصص */}
+                      {isScout && (
+                        <button
+                          onClick={() => handleEdit(report)}
+                          title="Edit Report"
+                          className="w-9 h-9 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center text-slate-500 hover:text-amber-400 hover:border-amber-500/40 transition-all">
+                          <Pencil size={14} />
+                        </button>
+                      )}
 
-                {/* Title */}
-                <div className="relative z-10">
-                  <h3 className="font-black text-slate-100 mb-2 uppercase tracking-tight text-sm group-hover:text-emerald-400 transition-colors">
-                    {report.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 mb-8 leading-relaxed font-medium uppercase tracking-wide opacity-80">{report.desc}</p>
-                </div>
+                      {/* 🗑️ Delete — على كل الأنواع */}
+                      <button
+                        onClick={() => handleDelete(report)}
+                        disabled={isDeleting}
+                        title="Delete Report"
+                        className="w-9 h-9 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center text-slate-500 hover:text-red-400 hover:border-red-500/40 transition-all disabled:opacity-40">
+                        {isDeleting
+                          ? <span className="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                          : <Trash2 size={14} />}
+                      </button>
 
-                {/* Footer */}
-                <div className="relative z-10">
-                  <div className="flex justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-600 mb-6 border-t border-slate-800/50 pt-4">
-                    <span>{report.date}</span>
-                    <span>{report.size}</span>
+                      {/* Icon */}
+                      <div className="w-10 h-10 bg-slate-950 rounded-2xl flex items-center justify-center text-slate-500 border border-white/5 shadow-inner group-hover:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                        <IconComponent size={18} />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex gap-4">
-                    <button
-                      onClick={() => openModal(report, index)}
-                      className="flex-1 border border-slate-800 bg-slate-950 text-slate-400 rounded-xl py-3 text-[10px] font-black uppercase tracking-widest hover:border-emerald-500/50 hover:bg-emerald-500/5 hover:text-white transition-all"
-                    >
-                      View / Edit
-                    </button>
-                    <button
-                      onClick={() => handleDownload(report)}
-                      className="flex-1 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 rounded-xl py-3 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-lg shadow-emerald-500/10"
-                    >
-                      Download
-                    </button>
+                  {/* ── Content ── */}
+                  <div className="flex-1 mb-6 z-10">
+                    <h3 className="text-white font-black text-lg uppercase tracking-tight mb-2 group-hover:text-emerald-400 transition-colors line-clamp-2">
+                      {report.title}
+                    </h3>
+                    <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">{report.desc}</p>
+                  </div>
+
+                  {/* ── Meta ── */}
+                  <div className="bg-slate-950/40 p-4 rounded-[1.8rem] border border-white/5 space-y-3 mb-6 z-10">
+                    <div className="flex justify-between items-center text-[10px] font-black tracking-widest text-slate-500">
+                      <span className="flex items-center gap-2 uppercase">
+                        <Calendar size={14} className="text-emerald-500" /> Generated On
+                      </span>
+                      <span className="text-slate-200">{report.date}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-black tracking-widest text-slate-500 border-t border-white/5 pt-3">
+                      <span className="flex items-center gap-2 uppercase">
+                        <Download size={14} className="text-emerald-500" /> File Size
+                      </span>
+                      <span className="text-slate-200">{report.size}</span>
+                    </div>
+                  </div>
+
+                  {/* ── Action ── */}
+                  <button className="w-full mt-auto inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-3.5 rounded-2xl bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-600 hover:text-white transition-all shadow-lg z-10">
+                    <Download size={16} /> Download PDF
+                  </button>
+
+                  {/* Decor */}
+                  <div className="absolute -bottom-6 -right-6 text-white/[0.02] pointer-events-none group-hover:text-emerald-500/[0.05] transition-colors duration-700">
+                    <IconComponent size={140} />
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
-        {/* Modal Form */}
-        {modalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-slate-950 rounded-2xl p-8 w-96 shadow-2xl relative">
-              <button
-                onClick={() => setModalOpen(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-red-500"
-              >
-                ✕
-              </button>
-              <h2 className="text-lg font-black text-slate-100 mb-4">
-                {editingIndex !== null ? "Edit Report" : "Create New Report"}
-              </h2>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                  className="w-full p-2 rounded-lg bg-slate-900 text-slate-100 border border-slate-700"
-                  required
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.name} value={cat.name}>{cat.name}</option>
-                  ))}
-                </select>
-
-                <input
-                  type="text"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  placeholder="Title"
-                  className="w-full p-2 rounded-lg bg-slate-900 text-slate-100 border border-slate-700"
-                  required
-                />
-                <textarea
-                  name="desc"
-                  value={formData.desc}
-                  onChange={handleChange}
-                  placeholder="Description"
-                  className="w-full p-2 rounded-lg bg-slate-900 text-slate-100 border border-slate-700"
-                  required
-                />
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    name="date"
-                    value={formData.date}
-                    onChange={handleChange}
-                    className="flex-1 p-2 rounded-lg bg-slate-900 text-slate-100 border border-slate-700"
-                    required
-                  />
-                  <input
-                    type="text"
-                    name="size"
-                    value={formData.size}
-                    onChange={handleChange}
-                    placeholder="Size"
-                    className="flex-1 p-2 rounded-lg bg-slate-900 text-slate-100 border border-slate-700"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-emerald-600 text-white py-2 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-500 transition-all"
-                >
-                  {editingIndex !== null ? "Update Report" : "Save Report"}
-                </button>
-              </form>
-            </div>
+        {!loading && filteredReports.length === 0 && (
+          <div className="text-center py-24">
+            <div className="text-6xl mb-6 opacity-20 grayscale">📭</div>
+            <p className="text-lg font-bold text-slate-400 uppercase tracking-widest">No reports found</p>
           </div>
         )}
       </div>
+
+      {/* ── Scout Report Modal ────────────────────────────────────────────── */}
+      <ScoutingModal
+        open={showScoutModal}
+        onClose={() => { setShowScoutModal(false); setEditReport(null); }}
+        onSaved={() => { setShowScoutModal(false); setEditReport(null); fetchReports(); }}
+        editData={editReport}
+      />
     </div>
   );
 }

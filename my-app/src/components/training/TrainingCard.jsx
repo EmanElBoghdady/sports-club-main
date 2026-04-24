@@ -7,32 +7,40 @@ const TrainingCard = ({ session }) => {
       <div className="flex justify-between items-start mb-4">
         <h3 className="font-bold text-lg text-slate-100 group-hover:text-emerald-400 transition-colors">{session.title}</h3>
         <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 border border-emerald-500/30 px-2 py-0.5 rounded-md bg-emerald-500/5">
-          {session.sport}
+          {session.sportType || 'GENERAL'}
         </span>
       </div>
 
       <div className="space-y-3 mb-6">
-        {session.team && (
+        {session.teamId && (
           <div className="flex items-center gap-3 text-slate-400 text-sm">
             <span className="text-emerald-500/50">👥</span>
-            <span className="font-medium text-slate-500 w-16">Team:</span>
-            <span className="text-slate-300">{session.team}</span>
+            <span className="font-medium text-slate-500 w-16">Team ID:</span>
+            <span className="text-slate-300 font-mono">#{session.teamId}</span>
           </div>
         )}
 
-        {session.time && (
+        {session.startTime && (
           <div className="flex items-center gap-3 text-slate-400 text-sm">
             <span className="text-emerald-500/50">🕒</span>
             <span className="font-medium text-slate-500 w-16">Time:</span>
-            <span className="text-slate-300">{session.time}</span>
+            <span className="text-slate-300">{session.startTime}</span>
           </div>
         )}
 
-        {session.coach && (
+        {session.durationMinutes && (
+          <div className="flex items-center gap-3 text-slate-400 text-sm">
+            <span className="text-emerald-500/50">⏱️</span>
+            <span className="font-medium text-slate-500 w-16">Duration:</span>
+            <span className="text-slate-300">{session.durationMinutes} mins</span>
+          </div>
+        )}
+
+        {session.coachId && (
           <div className="flex items-center gap-3 text-slate-400 text-sm">
             <span className="text-emerald-500/50">🧢</span>
             <span className="font-medium text-slate-500 w-16">Coach:</span>
-            <span className="text-slate-300">{session.coach}</span>
+            <span className="text-slate-300 font-mono text-[10px]">{session.coachId}</span>
           </div>
         )}
 
@@ -40,7 +48,7 @@ const TrainingCard = ({ session }) => {
           <div className="flex items-center gap-3 text-slate-400 text-sm">
             <span className="text-emerald-500/50">📍</span>
             <span className="font-medium text-slate-500 w-16">Location:</span>
-            <span className="text-slate-300">{session.location}</span>
+            <span className="text-slate-300 truncate max-w-[120px]">{session.location}</span>
           </div>
         )}
       </div>

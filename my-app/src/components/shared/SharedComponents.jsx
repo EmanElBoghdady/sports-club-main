@@ -89,9 +89,48 @@ export function Toast({ msg, type = "success", onClose }) {
 }
 
 // ─── FORM MODAL ───────────────────────────────────────────────────────────────
-export function FormModal({ title, fields, onSubmit, onClose, initialData = {} }) {
-    const [form, setForm] = useState(initialData);
-    const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+export function FormModal({ title, fields, onSubmit, onClose, initialData }) {
+    const [form, setForm] = useState(initialData || {});
+    const [errors, setErrors] = useState({});
+
+    // تحديث الفورم لو الـ initialData اتغيرت (مهم لحالة الـ Edit)
+    useEffect(() => {
+        setForm(initialData || {});
+    }, [initialData]);
+
+    const set = (k, v) => {
+        setForm(p => ({ ...p, [k]: v }));
+        if (errors[k]) setErrors(p => ({ ...p, [k]: null }));
+    };
+
+    const validate = () => {
+        const newErrors = {};
+        fields.forEach(f => {
+            const val = form[f.key];
+            if (f.key === "username" && (!val || val.length < 3)) {
+                newErrors[f.key] = "Username must be at least 3 characters";
+            }
+            if (f.key === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                newErrors[f.key] = "Invalid email format";
+            }
+            if (f.key === "password" && (!val || val.length < 6)) {
+                newErrors[f.key] = "Password must be at least 6 characters";
+            }
+            if (f.required && !val) {
+                newErrors[f.key] = "This field is required";
+            }
+        });
+        return newErrors;
+    };
+
+    const handleSubmit = () => {
+        const newErrors = validate();
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            return;
+        }
+        onSubmit(form);
+    };
 
     return (
         <div
@@ -99,42 +138,46 @@ export function FormModal({ title, fields, onSubmit, onClose, initialData = {} }
             onClick={e => e.target === e.currentTarget && onClose()}
         >
             <div className="bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-slate-800">
                     <h3 className="text-lg font-bold text-slate-100">{title}</h3>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-xl leading-none transition-colors">✕</button>
                 </div>
-                {/* Body */}
                 <div className="p-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {fields.map(f => (
                             <div key={f.key} className={`flex flex-col gap-1.5 ${f.full ? "sm:col-span-2" : ""}`}>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">{f.label}</label>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                                    {f.label}
+                                    {f.required && <span className="text-rose-500 ml-1">*</span>}
+                                </label>
                                 {f.type === "select" ? (
                                     <select
-                                        value={form[f.key] || ""}
+                                        value={form[f.key] ?? ""}
                                         onChange={e => set(f.key, e.target.value)}
-                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-800 bg-slate-900/50 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
+                                        className={`w-full px-3 py-2.5 rounded-xl border bg-slate-900/50 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all ${errors[f.key] ? "border-rose-500" : "border-slate-800"
+                                            }`}
                                     >
                                         <option value="">Select {f.label}</option>
-                                        {(f.options || []).map(o => <option key={o} value={o} className="bg-slate-900">{o}</option>)}
+                                        {(f.options || []).map((o, idx) => {
+                                            const isObj = typeof o === 'object' && o !== null;
+                                            const val = isObj ? o.value : o;
+                                            const lab = isObj ? o.label : o;
+                                            return <option key={idx} value={val} className="bg-slate-900">{lab}</option>;
+                                        })}
                                     </select>
-                                ) : f.type === "textarea" ? (
-                                    <textarea
-                                        rows={3}
-                                        value={form[f.key] || ""}
-                                        onChange={e => set(f.key, e.target.value)}
-                                        placeholder={f.placeholder}
-                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-800 bg-slate-900/50 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none placeholder:text-slate-600"
-                                    />
                                 ) : (
                                     <input
                                         type={f.type || "text"}
-                                        value={form[f.key] || ""}
+                                        value={form[f.key] ?? ""}
                                         onChange={e => set(f.key, e.target.value)}
                                         placeholder={f.placeholder}
-                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-800 bg-slate-900/50 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-slate-600"
+                                        className={`w-full px-3 py-2.5 rounded-xl border bg-slate-900/50 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-slate-600 ${errors[f.key] ? "border-rose-500" : "border-slate-800"
+                                            }`}
                                     />
+                                )}
+                                {/* ✅ رسالة الخطأ تحت الفيلد */}
+                                {errors[f.key] && (
+                                    <span className="text-[10px] text-rose-400 font-bold">{errors[f.key]}</span>
                                 )}
                             </div>
                         ))}
@@ -144,10 +187,10 @@ export function FormModal({ title, fields, onSubmit, onClose, initialData = {} }
                             Cancel
                         </button>
                         <button
-                            onClick={() => onSubmit(form)}
+                            onClick={handleSubmit}
                             className="px-8 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-950 transition-all active:scale-95"
                         >
-                            Save Change
+                            Save Changes
                         </button>
                     </div>
                 </div>
@@ -155,7 +198,6 @@ export function FormModal({ title, fields, onSubmit, onClose, initialData = {} }
         </div>
     );
 }
-
 // ─── STAT CARD ────────────────────────────────────────────────────────────────
 export function StatCard({ label, value, color = "text-emerald-500", sub }) {
     return (

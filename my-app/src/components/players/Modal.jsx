@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { FaUser } from "react-icons/fa";
-
+import { api } from "@/src/lib/api";
 const SPORTS = ["Football", "Basketball", "Handball"];
 
 const POSITIONS_BY_SPORT = {
@@ -58,24 +58,27 @@ export default function Modal({ open, onClose, onAddPlayer }) {
     return e;
   };
 
-  const handleSubmit = () => {
-    const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
+  const handleSubmit = async () => {
+    // تجميع البيانات المهمة فقط للسيرفر
+    const payload = {
+      dateOfBirth: form.dateOfBirth || "2003-01-01",
+      nationality: form.nationality || "Egyptian",
+      preferredPosition: (form.position || "FORWARD").toUpperCase().replace(/\s+/g, '_'),
+      marketValue: Number(form.points) || 0, // الجولز
+      kitNumber: Number(form.matches) || 0,  // الماتشات
+      outerTeamId: 1 // قيمة ثابتة طالما شلنا الحالة
+    };
 
-    onAddPlayer?.({
-      id: Date.now(),
-      ...form,
-      age: Number(form.age),
-      matches: Number(form.matches) || 0,
-      points: Number(form.points) || 0,
-      rating: Number(form.rating) || 0,
-    });
-
-    setForm(defaultForm);
-    setErrors({});
-    onClose();
+    try {
+      await api.createOuterPlayer(payload);
+      if (onAddPlayer) await onAddPlayer();
+      handleClose();
+      alert("✅ Player Saved!");
+    } catch (err) {
+      console.error("Submission error:", err.response?.data);
+      alert("Error saving player. Please check the fields.");
+    }
   };
-
   const handleClose = () => {
     setForm(defaultForm);
     setErrors({});
@@ -156,29 +159,6 @@ export default function Modal({ open, onClose, onAddPlayer }) {
             </select>
           </Field>
 
-          {/* State */}
-          <div className="col-span-2">
-            <Field label="Fitness State" error={errors.state}>
-              <div className="flex gap-2">
-                {STATES.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => set("state", s)}
-                    className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer
-                      ${form.state === s
-                        ? s === "Fit" ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                          : s === "Injured" ? "bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20"
-                            : "bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-500/20"
-                        : "border-slate-800 bg-slate-900/50 text-slate-500 hover:border-slate-700 hover:text-slate-300"
-                      }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </Field>
-          </div>
 
           {/* Nationality */}
           <Field label="Nationality" error={errors.nationality}>
