@@ -12,6 +12,8 @@ import {
   TrophyIcon,
 } from "@heroicons/react/24/outline";
 import { setToken } from "@/src/lib/auth"; // تأكدي من أن المسار صحيح
+import { jwtDecode } from "jwt-decode";
+import Cookies from "js-cookie";
 
 export default function Login() {
   const router = useRouter();
@@ -27,46 +29,61 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // إرسال الطلب للجيت واي (البورت 8080)
       const res = await fetch("http://localhost:8080/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: username,
-          password: password,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        // إذا كان اليوزر غلط أو الباك إند فيه مشكلة
         setError(data.message || "Invalid username or password");
         setLoading(false);
         return;
       }
 
-      // 1. تخزين التوكن
       if (data.access_token) {
+        // 1. تخزين التوكن الأصلي
         setToken(data.access_token);
 
-        // 2. تخزين بيانات المستخدم اختيارياً (لو محتاجة تعرضي اسمه في الداشبورد)
-        localStorage.setItem("user_info", JSON.stringify({
-          username: username,
-          loginTime: new Date().toISOString()
-        }));
+        // 2. فك التوكن لاستخراج المعلومات
+        const decoded = jwtDecode(data.access_token);
+        console.log("Decoded Content:", decoded);
 
-        console.log("Login success! Token stored.");
-        router.push("/dashboard");
+        // استخراج الـ Role من المسار الصحيح في Keycloak
+        // لاحظي أن الأدوار تأتي في مصفوفة [ "ADMIN" ]، لذا نأخذ العنصر الأول
+        const rawRole = decoded.realm_access?.roles?.[0] || "fan";
+
+        // تحويله لـ lowercase ليتناسب مع مقارنات السايد بار والميدل وير (admin)
+        const userRole = rawRole.toLowerCase();
+
+        console.log("Extracted Role:", userRole); // سيظهر لك "admin"
+
+        // التخزين
+        localStorage.setItem("user_role", userRole);
+        Cookies.set("user_role", userRole, { expires: 7, path: "/" });
+
+        console.log("الـ Role اللي هيتخزن:", userRole);
+        localStorage.setItem(
+          "user_info",
+          JSON.stringify({
+            username: username,
+            loginTime: new Date().toISOString(),
+          }),
+        );
+
+        console.log("Login success! Redirecting...");
+
+        // 5. التحويل باستخدام window.location لضمان قراءة الكوكيز فوراً
+        window.location.href = "/dashboard";
       } else {
         setError("Token not received from server");
       }
-
     } catch (err) {
-      console.error("LOGIN ERROR:", err);
-      setError("Cannot connect to server. Make sure Docker services are running.");
+      setError(
+        "Cannot connect to server. Make sure Docker services are running.",
+      );
     } finally {
       setLoading(false);
     }
@@ -98,22 +115,45 @@ export default function Login() {
               height={100}
               className="object-contain"
             />
-            <span className="text-7xl font-black italic bg-gradient-to-r from-emerald-500 via-teal-300 to-cyan-300 bg-clip-text text-transparent">Sportify</span>
+            <span className="text-7xl font-black italic bg-gradient-to-r from-emerald-500 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
+              Sportify
+            </span>
           </motion.div>
 
           <motion.div className="space-y-4">
-            <h1 className="text-5xl font-extrabold leading-tight">Your sports hub <br />reimagined.</h1>
-            <p className="text-white/85 text-lg max-w-sm">Manage teams, track performance, and bring your club to the next level.</p>
+            <h1 className="text-5xl font-extrabold leading-tight">
+              Your sports hub <br />
+              reimagined.
+            </h1>
+            <p className="text-white/85 text-lg max-w-sm">
+              Manage teams, track performance, and bring your club to the next
+              level.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-              <FeatureCard icon={<UserGroupIcon className="h-7 w-7 text-white" />} text="Active players & staff" />
-              <FeatureCard icon={<ChartBarIcon className="h-7 w-7 text-white" />} text="Performance tracking" />
-              <FeatureCard icon={<TrophyIcon className="h-7 w-7 text-white" />} text="Multi-sport support" />
-              <FeatureCard icon={<ShieldCheckIcon className="h-7 w-7 text-white" />} text="Role-based access" />
+              <FeatureCard
+                icon={<UserGroupIcon className="h-7 w-7 text-white" />}
+                text="Active players & staff"
+              />
+              <FeatureCard
+                icon={<ChartBarIcon className="h-7 w-7 text-white" />}
+                text="Performance tracking"
+              />
+              <FeatureCard
+                icon={<TrophyIcon className="h-7 w-7 text-white" />}
+                text="Multi-sport support"
+              />
+              <FeatureCard
+                icon={<ShieldCheckIcon className="h-7 w-7 text-white" />}
+                text="Role-based access"
+              />
             </div>
           </motion.div>
 
           <div className="flex gap-6 text-sm">
-            <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />Secure System</span>
+            <span className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+              Secure System
+            </span>
           </div>
         </div>
       </div>
@@ -126,27 +166,39 @@ export default function Login() {
       >
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
-            <h2 className="text-4xl font-black bg-gradient-to-r from-emerald-400 to-cyan-300 bg-clip-text text-transparent">Welcome back</h2>
-            <p className="text-slate-500 mt-2 font-medium">Sign in to continue to your dashboard</p>
+            <h2 className="text-4xl font-black bg-gradient-to-r from-emerald-400 to-cyan-300 bg-clip-text text-transparent">
+              Welcome back
+            </h2>
+            <p className="text-slate-500 mt-2 font-medium">
+              Sign in to continue to your dashboard
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2"
+              >
                 <span>⚠️</span> {error}
               </motion.div>
             )}
 
             <div className="space-y-2">
-              <label className="block text-xs font-black uppercase text-slate-500 tracking-widest">Username</label>
-              <div className={`relative rounded-2xl border bg-slate-900/50 transition-all ${focused.username ? "border-emerald-500 ring-4 ring-emerald-500/10" : "border-slate-800"}`}>
+              <label className="block text-xs font-black uppercase text-slate-500 tracking-widest">
+                Username
+              </label>
+              <div
+                className={`relative rounded-2xl border bg-slate-900/50 transition-all ${focused.username ? "border-emerald-500 ring-4 ring-emerald-500/10" : "border-slate-800"}`}
+              >
                 <input
                   type="text"
                   placeholder="admin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  onFocus={() => setFocused(f => ({ ...f, username: true }))}
-                  onBlur={() => setFocused(f => ({ ...f, username: false }))}
+                  onFocus={() => setFocused((f) => ({ ...f, username: true }))}
+                  onBlur={() => setFocused((f) => ({ ...f, username: false }))}
                   className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200" // تم تغيير اللون لـ slate-200
                   required
                 />
@@ -154,15 +206,19 @@ export default function Login() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-black uppercase text-slate-500 tracking-widest">Password</label>
-              <div className={`relative rounded-2xl border bg-slate-900/50 transition-all ${focused.password ? "border-emerald-500 ring-4 ring-emerald-500/10" : "border-slate-800"}`}>
+              <label className="block text-xs font-black uppercase text-slate-500 tracking-widest">
+                Password
+              </label>
+              <div
+                className={`relative rounded-2xl border bg-slate-900/50 transition-all ${focused.password ? "border-emerald-500 ring-4 ring-emerald-500/10" : "border-slate-800"}`}
+              >
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onFocus={() => setFocused(f => ({ ...f, password: true }))}
-                  onBlur={() => setFocused(f => ({ ...f, password: false }))}
+                  onFocus={() => setFocused((f) => ({ ...f, password: true }))}
+                  onBlur={() => setFocused((f) => ({ ...f, password: false }))}
                   className="w-full px-4 py-3.5 rounded-2xl outline-none bg-transparent text-slate-200"
                   required
                 />
@@ -179,7 +235,13 @@ export default function Login() {
           </form>
 
           <p className="text-center text-slate-500 text-sm">
-            Don't have an account? <Link href="/signup" className="text-emerald-400 font-bold hover:underline">Create One</Link>
+            Don't have an account?{" "}
+            <Link
+              href="/signup"
+              className="text-emerald-400 font-bold hover:underline"
+            >
+              Create One
+            </Link>
           </p>
         </div>
       </motion.div>

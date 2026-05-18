@@ -3,16 +3,28 @@
 import React from "react";
 import { FaShieldAlt, FaUserCircle, FaSignOutAlt } from "react-icons/fa";
 import { useRouter } from "next/navigation";
+import Cookies from 'js-cookie';
 
 const Navbar = ({ isSidebarOpen, currentPage, user }) => {
   const router = useRouter();
 
   const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("auth-token");
-    }
-    router.push("/login");
-  };
+  // 1. مسح الكوكيز (تأكدي من إضافة path: '/')
+  Cookies.remove('user_role', { path: '/' });
+  Cookies.remove('token', { path: '/' }); // لو بتخزني التوكن في كوكيز برضه
+
+  // 2. مسح الـ LocalStorage
+  localStorage.removeItem("user_role");
+  localStorage.removeItem("user_info");
+  localStorage.removeItem("token");
+  
+  // اختياري: لو عايزة تمسحي كل حاجة مرة واحدة في الـ storage
+  // localStorage.clear(); 
+
+  // 3. توجيه المستخدم لصفحة اللوجين
+  // يفضل استخدام window.location عشان يعمل ريفريش كامل للحالة
+  window.location.href = "/login";
+};
 
   return (
     <div className="bg-[var(--bg-card)] shadow-sm border-b border-[var(--border)] p-4 transition-all duration-300 ease-in-out">

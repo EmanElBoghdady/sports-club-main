@@ -284,13 +284,14 @@ sticky top-5">
           {/* Search Area */}
           <div className="relative group w-full">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Search size={14} className="text-slate-500 group-focus-within:text-emerald-500 transition-colors" />
+              <Search size={14} className="text-slate-500 group-focus-within:text-emerald-500  transition-colors" />
             </div>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search conversations..."
-              className="w-full bg-slate-950/80 border border-slate-800/50 rounded-2xl pl-12 pr-4 py-3.5 outline-none text-[11px] font-bold tracking-wider text-slate-100 placeholder:text-slate-600 transition-all focus:border-emerald-500/30 focus:bg-slate-950 focus:shadow-[0_0_20px_rgba(16,185,129,0.05)]"
+              className="w-full h-11 bg-slate-950/80 border border-slate-800/50 rounded-2xl pl-12 pr-4 text-[11px] font-bold tracking-wider text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/30"
+              // className="w-full bg-slate-950/80 border border-slate-800/50 rounded-2xl pl-12 pr-12 py-3.5 outline-none text-[11px] font-bold tracking-wider text-slate-100 placeholder:text-slate-600 transition-all focus:border-emerald-500/30 focus:bg-slate-950 focus:shadow-[0_0_20px_rgba(16,185,129,0.05)]"
             />
           </div>
 
