@@ -4,8 +4,11 @@ import { api } from "@/src/lib/api";
 import PlayerCard from "./PlayerCard";
 import PlayerFilter from "./PlayerFilter";
 import Modal from "./Modal";
-import { FaUser } from "react-icons/fa";
-import { FaMagnifyingGlass } from "react-icons/fa6";
+import { FiUser, FiSearch } from "react-icons/fi";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
+import { FcSportsMode } from "react-icons/fc";
+import { MdOutlineAssessment } from "react-icons/md";
 import Card from "./Card";
 import Header from "../Header";
 import {
@@ -16,32 +19,86 @@ import {
   StatusBadge,
 } from "@/src/components/shared/SharedComponents";
 
+// Mirrors backend Position enum. Football and Handball share visual names
+// (LEFT_WING, LEFT_BACK, GOALKEEPER, …) — Handball is HB_ prefixed.
 const SPORT_MAP = {
-  football: ["GOALKEEPER", "DEFENDER", "MIDFIELDER", "FORWARD"],
+  football: [
+    "GOALKEEPER", "RIGHT_BACK", "LEFT_BACK", "CENTER_BACK",
+    "DEFENSIVE_MID", "CENTRAL_MID", "ATTACKING_MID",
+    "RIGHT_WING", "LEFT_WING", "STRIKER",
+  ],
   basketball: [
-    "POINT_GUARD",
-    "SHOOTING_GUARD",
-    "SMALL_FORWARD",
-    "POWER_FORWARD",
-    "CENTER",
+    "POINT_GUARD", "SHOOTING_GUARD", "SMALL_FORWARD", "POWER_FORWARD", "CENTER",
   ],
   handball: [
-    "LEFT_WING",
-    "RIGHT_WING",
-    "LEFT_BACK",
-    "RIGHT_BACK",
-    "CENTRE_BACK",
-    "PIVOT",
+    "HB_GOALKEEPER", "HB_LEFT_WING", "HB_RIGHT_WING",
+    "HB_LEFT_BACK", "HB_RIGHT_BACK", "HB_CENTRE_BACK", "HB_PIVOT",
+  ],
+  volleyball: [
+    "SETTER", "OUTSIDE_HITTER", "OPPOSITE_HITTER", "MIDDLE_BLOCKER",
+    "LIBERO", "DEFENSIVE_SPECIALIST",
+  ],
+  tennis: ["SINGLES_PLAYER", "DOUBLES_PLAYER"],
+  swimming: [
+    "FREESTYLE_SWIMMER", "BACKSTROKE_SWIMMER", "BREASTSTROKE_SWIMMER",
+    "BUTTERFLY_SWIMMER", "MEDLEY_SWIMMER",
   ],
 };
 
-const getSportFromPosition = (pos) => {
-  if (!pos) return "";
-  const p = pos.toUpperCase().trim();
+// Normalise any sport string (FOOTBALL, "Bàsquet", "Handbol", …) to one of
+// our canonical keys.
+const normaliseSport = (raw) => {
+  const s = String(raw || "").toLowerCase().trim();
+  if (!s) return "";
+  if (s.includes("foot") || s.includes("soccer")) return "football";
+  if (s.includes("basket") || s.includes("basquet") || s.includes("bàsquet")) return "basketball";
+  if (s.includes("hand")) return "handball";
+  if (s.includes("volley") || s.includes("voleibol")) return "volleyball";
+  if (s.includes("tennis") || s.includes("tenis")) return "tennis";
+  if (s.includes("swim") || s.includes("natac")) return "swimming";
+  return "";
+};
 
-  if (SPORT_MAP.football.includes(p)) return "football";
+// Detect a player's sport. Prefers an explicit sport field on the response
+// if available; falls back to position-based detection. The HB_ prefix on
+// handball positions is treated as the source of truth — that is what
+// prevents the Football filter from leaking Handball players whose
+// non-prefixed positions (LEFT_WING, LEFT_BACK, GOALKEEPER, …) would
+// otherwise collide with the Football list.
+const getSportFromPlayer = (player) => {
+  if (!player) return "";
+
+  // 1. Prefer an explicit sport field on the player payload.
+  const explicit =
+    player.sportName ||
+    player.teamSport ||
+    player.team?.sportName ||
+    player.team?.sport?.name ||
+    player.sport?.name ||
+    (typeof player.sport === "string" ? player.sport : "");
+  const fromExplicit = normaliseSport(explicit);
+  if (fromExplicit) return fromExplicit;
+
+  // 2. Fall back to position-based detection.
+  const posRaw = player.preferredPosition || player.position;
+  if (!posRaw) return "";
+  const posStr = typeof posRaw === "object"
+    ? (posRaw.name || posRaw.value || "")
+    : posRaw;
+  const p = String(posStr).toUpperCase().trim();
+
+  // Handball is unambiguous via the HB_ prefix.
+  if (p.startsWith("HB_")) return "handball";
+  // Swimming positions all end with _SWIMMER.
+  if (p.endsWith("_SWIMMER")) return "swimming";
+
   if (SPORT_MAP.basketball.includes(p)) return "basketball";
-  if (SPORT_MAP.handball.includes(p)) return "handball";
+  if (SPORT_MAP.volleyball.includes(p)) return "volleyball";
+  if (SPORT_MAP.tennis.includes(p)) return "tennis";
+  // Football last so it doesn't claim shared names belonging to other
+  // sports detected above.
+  if (SPORT_MAP.football.includes(p)) return "football";
+
   return "";
 };
 
@@ -164,7 +221,7 @@ function Players() {
     setLoading(true);
     try {
       let res;
-      if (tab === "directory") res = await api.getOuterPlayers();
+      if (tab === "directory") res = await api.getPlayers();
       else if (tab === "stats") res = await api.getPlayerMatchStatistics();
       else if (tab === "assessments")
         res = await api.getPlayerTrainingAssessments();
@@ -192,7 +249,7 @@ function Players() {
   const filteredPlayers = (data.directory || []).filter((p) => {
     const playerName = (p.name || p.firstName || "").toLowerCase();
     const searchTerm = search.toLowerCase();
-    const playerSport = getSportFromPosition(p.preferredPosition || p.position);
+    const playerSport = getSportFromPlayer(p);
     const searchMatch = playerName.includes(searchTerm);
     const sportMatch =
       selectedSport === "All Sports" ||
@@ -279,8 +336,18 @@ function Players() {
 
   const tabsConfig = [
     ["directory", "👥 Directory"],
-    ["stats", "📊 Match Stats"],
-    ["assessments", "💪 Training Assessments"],
+    [
+      "stats",
+      <span className="inline-flex items-center gap-1.5">
+        <FcSportsMode size={14} /> Match Stats
+      </span>,
+    ],
+    [
+      "assessments",
+      <span className="inline-flex items-center gap-1.5">
+        <MdOutlineAssessment size={14} /> Training Assessments
+      </span>,
+    ],
   ];
 
   return (
@@ -296,7 +363,7 @@ function Players() {
               : `Add ${tab === "stats" ? "Stat" : "Assessment"}`
             : null
         }
-        icon={<FaUser className="text-white" />}
+        icon={<FiUser className="text-white" strokeWidth={2.4} />}
         onClick={() => {
           if (!isAdmin) return; // حماية إضافية
           if (tab === "directory") setOpenPlayerModal(true);
@@ -329,7 +396,7 @@ function Players() {
               {/* ... كود البحث والـ Filter (يظهر للكل عادي) ... */}
               <div className="bg-slate-900/50 backdrop-blur-sm px-6 py-4 rounded-2xl flex flex-col lg:flex-row justify-between items-center gap-6 border border-slate-800">
                 <div className="flex items-center rounded-xl px-4 py-3 w-full lg:w-1/3 bg-slate-950 border border-slate-800">
-                  <FaMagnifyingGlass className="text-slate-500 mr-3" />
+                  <FiSearch className="text-slate-500 mr-3" strokeWidth={2.2} />
                   <input
                     type="search"
                     placeholder="Search stars..."
@@ -352,19 +419,14 @@ function Players() {
                 <Card
                   title={isAdmin ? "Total Players" : "Club Stars"}
                   num={data.directory.length.toString()}
-                  icon={<FaUser className="text-emerald-500" />}
+                  icon={<FiUser className="text-emerald-500" strokeWidth={2.4} />}
                 />
 
                 {/* لاعبي كرة القدم */}
                 <Card
                   title="Football Squad"
                   num={data.directory
-                    .filter(
-                      (p) =>
-                        getSportFromPosition(
-                          p.preferredPosition || p.position,
-                        ) === "football",
-                    )
+                    .filter((p) => getSportFromPlayer(p) === "football")
                     .length.toString()}
                   icon="⚽"
                 />
@@ -373,12 +435,7 @@ function Players() {
                 <Card
                   title="Basketball Team"
                   num={data.directory
-                    .filter(
-                      (p) =>
-                        getSportFromPosition(
-                          p.preferredPosition || p.position,
-                        ) === "basketball",
-                    )
+                    .filter((p) => getSportFromPlayer(p) === "basketball")
                     .length.toString()}
                   icon="🏀"
                 />
@@ -387,12 +444,7 @@ function Players() {
                 <Card
                   title="Handball Giants"
                   num={data.directory
-                    .filter(
-                      (p) =>
-                        getSportFromPosition(
-                          p.preferredPosition || p.position,
-                        ) === "handball",
-                    )
+                    .filter((p) => getSportFromPlayer(p) === "handball")
                     .length.toString()}
                   icon="🤾"
                 />
@@ -494,13 +546,13 @@ function Players() {
                                 }}
                                 className="text-slate-500 hover:text-emerald-500 transition-colors"
                               >
-                                ✏️
+                                <AiFillEdit size={16} />
                               </button>
                               <button
                                 onClick={() => handleDelete(item.id)}
                                 className="text-slate-500 hover:text-rose-500 transition-colors"
                               >
-                                🗑️
+                                <RiDeleteBin6Line size={16} />
                               </button>
                             </div>
                           </td>

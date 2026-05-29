@@ -1,10 +1,14 @@
 "use client"
 import React, { useState, useEffect } from 'react';
 import { api } from "@/src/lib/api";
-import { 
-    PageHeader, AddButton, FilterTabs, Toast, EmptyState, FormModal, StatCard, SportBadge, StatusBadge 
+import {
+    PageHeader, AddButton, FilterTabs, Toast, EmptyState, FormModal, StatCard, SportBadge, StatusBadge
 } from "@/src/components/shared/SharedComponents";
 import TrainingDayGroup from './TrainingDayGroup';
+import useRole from "@/src/lib/useRole";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
+import { FaClipboardCheck } from "react-icons/fa";
 
 const sessionFields = [
     { key: "title", label: "Session Title", required: true },
@@ -58,6 +62,7 @@ const TrainingSchedule = () => {
     const [showModal, setShowModal] = useState(false);
     const [editItem, setEditItem] = useState(null);
     const [toast, setToast] = useState(null);
+    const { canEdit } = useRole();
 
     const showToast = (msg, type = "success") => setToast({ msg, type });
 
@@ -158,7 +163,7 @@ const TrainingSchedule = () => {
         ["sessions", "📅 Sessions"],
         ["plans", "📝 Plans"],
         ["drills", "🏃‍♂️ Drills"],
-        ["attendance", "✅ Attendance"]
+        ["attendance", <span className="inline-flex items-center gap-1.5"><FaClipboardCheck size={12} /> Attendance</span>]
     ];
 
     return (
@@ -166,7 +171,7 @@ const TrainingSchedule = () => {
             <PageHeader 
                 title="Training Hub" 
                 subtitle="Manage your schedules, plans, drills, and team attendance" 
-                action={<AddButton label={`+ Add ${tab.charAt(0).toUpperCase() + tab.slice(1, -1)}`} onClick={() => { setEditItem(null); setShowModal(true); }} />} 
+                action={canEdit ? <AddButton label={`+ Add ${tab.charAt(0).toUpperCase() + tab.slice(1, -1)}`} onClick={() => { setEditItem(null); setShowModal(true); }} /> : null}
             />
 
             <FilterTabs tabs={tabs} active={tab} onSelect={setTab} />
@@ -225,8 +230,8 @@ const TrainingSchedule = () => {
                                             <td className="px-6 py-4"><StatusBadge status={p.status || "DRAFT"} /></td>
                                             <td className="px-6 py-4">
                                                 <div className="flex gap-3">
-                                                    <button onClick={() => { setEditItem(p); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                    <button onClick={() => handleDelete(p.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                    <button onClick={() => { setEditItem(p); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                    <button onClick={() => handleDelete(p.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -265,8 +270,8 @@ const TrainingSchedule = () => {
                                             <td className="px-6 py-4 text-emerald-400 font-bold">{d.durationMinutes} min</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex gap-3">
-                                                    <button onClick={() => { setEditItem(d); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                    <button onClick={() => handleDelete(d.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                    <button onClick={() => { setEditItem(d); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                    <button onClick={() => handleDelete(d.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -307,8 +312,8 @@ const TrainingSchedule = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex gap-3">
-                                                    <button onClick={() => { setEditItem(a); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                    <button onClick={() => handleDelete(a.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                    <button onClick={() => { setEditItem(a); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                    <button onClick={() => handleDelete(a.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                                 </div>
                                             </td>
                                         </tr>

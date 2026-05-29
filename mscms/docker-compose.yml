@@ -255,6 +255,31 @@ services:
     networks:
       - mscms-network
 
+  # --- Machine Learning Models (Python / FastAPI) ---
+  # Both containers share the same image but run different FastAPI apps
+  # selected by working_dir. Exposed only inside mscms-network — the gateway
+  # is the public entry point (JWT + RBAC). Host ports are kept for direct
+  # debugging via Swagger UI.
+  ml-match-predictor:
+    image: shahod/sportify:latest
+    container_name: ml-match-predictor
+    working_dir: "/app/Predict Matches"
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "9000:8000"
+    networks:
+      - mscms-network
+
+  ml-player-rating:
+    image: shahod/sportify:latest
+    container_name: ml-player-rating
+    working_dir: "/app/Evaluate Players"
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "9001:8000"
+    networks:
+      - mscms-network
+
 networks:
   mscms-network:
     driver: bridge

@@ -9,10 +9,38 @@ import {
   Mail,
   Archive,
   X,
-  Trash2,
   User,
 } from "lucide-react";
+import { RiDeleteBin6Line } from "react-icons/ri";
 import { api } from "../../lib/api";
+
+// Pull the current user's Keycloak id. Falls back to decoding the JWT
+// for users who logged in before the Login flow started persisting it
+// under its own localStorage key.
+function getCurrentKeycloakId() {
+  if (typeof window === "undefined") return null;
+  const direct = localStorage.getItem("keycloakId");
+  if (direct) return direct;
+  try {
+    const info = JSON.parse(localStorage.getItem("user_info") || "{}");
+    if (info.keycloakId) return info.keycloakId;
+  } catch {
+    // ignore
+  }
+  // Last-resort fallback: decode the JWT's `sub` claim.
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(
+      decodeURIComponent(atob(base64).split("").map((c) =>
+        "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join(""))
+    );
+    return payload.sub || null;
+  } catch {
+    return null;
+  }
+}
 
 export default function Messages() {
   // ======================
@@ -49,7 +77,7 @@ export default function Messages() {
     const loadMessages = async () => {
       setLoading(true);
       try {
-        const keycloakId = localStorage.getItem("keycloakId");
+        const keycloakId = getCurrentKeycloakId();
 
         let data = [];
 
@@ -112,7 +140,7 @@ export default function Messages() {
   const refreshMessages = async () => {
     setLoading(true);
 
-    const keycloakId = localStorage.getItem("keycloakId");
+    const keycloakId = getCurrentKeycloakId();
 
     let data = [];
     try {
@@ -142,7 +170,7 @@ export default function Messages() {
     if (!newMessage.sender || !newMessage.title || !newMessage.content) return;
 
     try {
-      const keycloakId = localStorage.getItem("keycloakId");
+      const keycloakId = getCurrentKeycloakId();
 
       const payload = {
         senderUserKeycloakId: keycloakId,
@@ -175,7 +203,7 @@ export default function Messages() {
     if (!reply.trim() || !selectedMessage) return;
 
     try {
-      const keycloakId = localStorage.getItem("keycloakId");
+      const keycloakId = getCurrentKeycloakId();
 
       const payload = {
         senderUserKeycloakId: keycloakId,
@@ -223,6 +251,7 @@ export default function Messages() {
   };
 
   const handleDelete = async (id) => {
+    if (!confirm("Delete this message? This cannot be undone.")) return;
     try {
       await api.deleteMessage(id);
 
@@ -234,7 +263,8 @@ export default function Messages() {
 
       await refreshMessages();
     } catch (err) {
-      console.error(err);
+      console.error("Delete message error:", err);
+      alert(err.message || "Failed to delete message. Please try again.");
     }
   };
 
@@ -363,7 +393,7 @@ sticky top-5">
                   onClick={(e) => { e.stopPropagation(); handleDelete(msg.id); }}
                   className="absolute bottom-3 right-3 text-slate-800 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                 >
-                  <Trash2 size={12} />
+                  <RiDeleteBin6Line size={12} />
                 </button>
               </div>
             ))}

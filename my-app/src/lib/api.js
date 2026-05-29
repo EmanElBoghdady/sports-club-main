@@ -1,5 +1,11 @@
 const API_BASE = "http://localhost:8080";
 
+// ML services run as independent FastAPI containers (host ports 9000/9001),
+// proxied through Next.js (see next.config.mjs `rewrites`) so the browser
+// sees same-origin requests and CORS is sidestepped.
+const ML_MATCH_BASE  = "/ml-proxy/match";
+const ML_PLAYER_BASE = "/ml-proxy/player";
+
 async function apiFetch(url, options = {}) {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const headers = {
@@ -31,6 +37,8 @@ export const api = {
     createAlert: (data) => apiFetch(`${API_BASE}/alerts`, { method: 'POST', body: JSON.stringify(data) }),
     updateAlert: (id, data) => apiFetch(`${API_BASE}/alerts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteAlert: (id) => apiFetch(`${API_BASE}/alerts/${id}`, { method: 'DELETE' }),
+    // Note: backend uses query-string id, not /{id}/action. Don't "fix" to
+    // /alerts/{id}/resolve without verifying the controller mapping first.
     resolveAlert: (id) => apiFetch(`${API_BASE}/alerts/resolve?id=${id}`, { method: 'PATCH' }),
     acknowledgeAlert: (id) => apiFetch(`${API_BASE}/alerts/acknowledge?id=${id}`, { method: 'PATCH' }),
 
@@ -60,7 +68,7 @@ export const api = {
         Fitness: {
             get: () => apiFetch(`${API_BASE}/fitness-tests`),
             getById: (id) => apiFetch(`${API_BASE}/fitness-tests/${id}`),
-            getBySport: () => apiFetch(`${API_BASE}/fitness-tests/by-sport`),
+            getBySport: (sport) => apiFetch(`${API_BASE}/fitness-tests/by-sport?sport=${encodeURIComponent(sport)}`),
             post: (data) => apiFetch(`${API_BASE}/fitness-tests`, { method: 'POST', body: JSON.stringify(data) }),
             put: (id, data) => apiFetch(`${API_BASE}/fitness-tests/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
             delete: (id) => apiFetch(`${API_BASE}/fitness-tests/${id}`, { method: 'DELETE' })
@@ -132,19 +140,8 @@ export const api = {
     updateSportManager: (id, data) => apiFetch(`${API_BASE}/sport-managers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteSportManager: (id) => apiFetch(`${API_BASE}/sport-managers/${id}`, { method: 'DELETE' }),
 
-    // 5. Training Module
-    getTrainingSessions: () => apiFetch(`${API_BASE}/training-sessions`),
-    createTrainingSession: (data) => apiFetch(`${API_BASE}/training-sessions`, { method: 'POST', body: JSON.stringify(data) }),
-    updateTrainingSession: (id, data) => apiFetch(`${API_BASE}/training-sessions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    deleteTrainingSession: (id) => apiFetch(`${API_BASE}/training-sessions/${id}`, { method: 'DELETE' }),
-    getTrainingPlans: () => apiFetch(`${API_BASE}/training-plans`),
-    createTrainingPlan: (data) => apiFetch(`${API_BASE}/training-plans`, { method: 'POST', body: JSON.stringify(data) }),
-    updateTrainingPlan: (id, data) => apiFetch(`${API_BASE}/training-plans/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    deleteTrainingPlan: (id) => apiFetch(`${API_BASE}/training-plans/${id}`, { method: 'DELETE' }),
-    getTrainingDrills: () => apiFetch(`${API_BASE}/training-drills`),
-    updateTrainingDrill: (id, data) => apiFetch(`${API_BASE}/training-drills/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    getAttendance: () => apiFetch(`${API_BASE}/attendance`),
-    updateAttendance: (id, data) => apiFetch(`${API_BASE}/attendance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    // 5. Training Module — see consolidated block below (was duplicated; the
+    // fuller version with full CRUD on drills + attendance was kept).
 
     // 6. Teams & Players Module
     getTeams: () => apiFetch(`${API_BASE}/teams`),
@@ -168,6 +165,9 @@ export const api = {
 
     getPlayers: (status = 'AVAILABLE') => apiFetch(`${API_BASE}/players?status=${status}`),
     getPlayerById: (id) => apiFetch(`${API_BASE}/players/${id}`),
+    // POST /players creates a Keycloak user (PLAYER role) AND the player record
+    // in one call. Schema is the 17-field DTO documented in Swagger.
+    createPlayer: (data) => apiFetch(`${API_BASE}/players`, { method: 'POST', body: JSON.stringify(data) }),
     updatePlayer: (id, data) => apiFetch(`${API_BASE}/players/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     updatePlayerStatus: (id, status) => apiFetch(`${API_BASE}/players/${id}/status?status=${status}`, { method: 'PUT' }),
     assignRosterToPlayer: (id, rosterId) => apiFetch(`${API_BASE}/players/${id}/assign-roster/${rosterId}`, { method: 'PUT' }),
@@ -176,18 +176,6 @@ export const api = {
     createNationalTeam: (data) => apiFetch(`${API_BASE}/national-teams`, { method: 'POST', body: JSON.stringify(data) }),
     updateNationalTeam: (id, data) => apiFetch(`${API_BASE}/national-teams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteNationalTeam: (id) => apiFetch(`${API_BASE}/national-teams/${id}`, { method: 'DELETE' }),
-
-    getTeams: () => apiFetch(`${API_BASE}/teams`),
-    createTeam: (data) => apiFetch(`${API_BASE}/teams`, { method: 'POST', body: JSON.stringify(data) }),
-    updateTeam: (id, data) => apiFetch(`${API_BASE}/teams/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    deleteTeam: (id) => apiFetch(`${API_BASE}/teams/${id}`, { method: 'DELETE' }),
-
-    getSports: () => apiFetch(`${API_BASE}/sports`),
-    getSportById: (id) => apiFetch(`${API_BASE}/sports/${id}`),
-    createSport: (data) => apiFetch(`${API_BASE}/sports`, { method: 'POST', body: JSON.stringify(data) }),
-    updateSport: (id, data) => apiFetch(`${API_BASE}/sports/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    deleteSport: (id) => apiFetch(`${API_BASE}/sports/${id}`, { method: 'DELETE' }),
-    getSportsByType: (type) => apiFetch(`${API_BASE}/sports/type/${type}`),
 
     // 7. Transfers, Contracts & Callups
     getIncomingTransfers: () => apiFetch(`${API_BASE}/player-transfers-incoming`),
@@ -240,7 +228,7 @@ export const api = {
 
     getPlayerMatchStatistics: () => apiFetch(`${API_BASE}/player-match-statistics`),
     getPlayerMatchStatisticById: (id) => apiFetch(`${API_BASE}/player-match-statistics/${id}`),
-    getPlayerMatchStatisticsBySport: () => apiFetch(`${API_BASE}/player-match-statistics/by-sport`),
+    getPlayerMatchStatisticsBySport: (sport) => apiFetch(`${API_BASE}/player-match-statistics/by-sport?sport=${encodeURIComponent(sport)}`),
     getPlayerMatchStatisticsByMatch: (matchId) => apiFetch(`${API_BASE}/player-match-statistics/by-match/${matchId}`),
     createPlayerMatchStatistic: (data) => apiFetch(`${API_BASE}/player-match-statistics`, { method: 'POST', body: JSON.stringify(data) }),
     updatePlayerMatchStatistic: (id, data) => apiFetch(`${API_BASE}/player-match-statistics/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -266,19 +254,19 @@ export const api = {
     deleteTrainingAnalytics: (id) => apiFetch(`${API_BASE}/training-analytics/${id}`, { method: 'DELETE' }),
 
     getTeamAnalytics: () => apiFetch(`${API_BASE}/team-analytics`),
-    getTeamAnalyticsBySport: () => apiFetch(`${API_BASE}/team-analytics/by-sport`),
+    getTeamAnalyticsBySport: (sport) => apiFetch(`${API_BASE}/team-analytics/by-sport?sport=${encodeURIComponent(sport)}`),
     createTeamAnalytics: (data) => apiFetch(`${API_BASE}/team-analytics`, { method: 'POST', body: JSON.stringify(data) }),
     updateTeamAnalytics: (id, data) => apiFetch(`${API_BASE}/team-analytics/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteTeamAnalytics: (id) => apiFetch(`${API_BASE}/team-analytics/${id}`, { method: 'DELETE' }),
 
     getPlayerAnalytics: () => apiFetch(`${API_BASE}/player-analytics`),
-    getPlayerAnalyticsBySport: () => apiFetch(`${API_BASE}/player-analytics/by-sport`),
+    getPlayerAnalyticsBySport: (sport) => apiFetch(`${API_BASE}/player-analytics/by-sport?sport=${encodeURIComponent(sport)}`),
     createPlayerAnalytics: (data) => apiFetch(`${API_BASE}/player-analytics`, { method: 'POST', body: JSON.stringify(data) }),
     updatePlayerAnalytics: (id, data) => apiFetch(`${API_BASE}/player-analytics/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deletePlayerAnalytics: (id) => apiFetch(`${API_BASE}/player-analytics/${id}`, { method: 'DELETE' }),
 
     getMatchAnalyses: () => apiFetch(`${API_BASE}/match-analyses`),
-    getMatchAnalysesBySport: () => apiFetch(`${API_BASE}/match-analyses/by-sport`),
+    getMatchAnalysesBySport: (sport) => apiFetch(`${API_BASE}/match-analyses/by-sport?sport=${encodeURIComponent(sport)}`),
     createMatchAnalysis: (data) => apiFetch(`${API_BASE}/match-analyses`, { method: 'POST', body: JSON.stringify(data) }),
     updateMatchAnalysis: (id, data) => apiFetch(`${API_BASE}/match-analyses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteMatchAnalysis: (id) => apiFetch(`${API_BASE}/match-analyses/${id}`, { method: 'DELETE' }),
@@ -292,7 +280,6 @@ export const api = {
     getOuterPlayers: () => apiFetch(`${API_BASE}/outer-players`),
     getOuterPlayerById: (id) => apiFetch(`${API_BASE}/outer-players/${id}`),
     createOuterPlayer: (data) => apiFetch(`${API_BASE}/outer-players`, { method: 'POST', body: JSON.stringify(data) }),
-    addOuterPlayer: (data) => apiFetch(`${API_BASE}/outer-players`, { method: 'POST', body: JSON.stringify(data) }),
     updateOuterPlayer: (id, data) => apiFetch(`${API_BASE}/outer-players/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteOuterPlayer: (id) => apiFetch(`${API_BASE}/outer-players/${id}`, { method: 'DELETE' }),
 
@@ -306,9 +293,35 @@ export const api = {
     updateSponsorOffer: (id, data) => apiFetch(`${API_BASE}/sponsor-offers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteSponsorOffer: (id) => apiFetch(`${API_BASE}/sponsor-offers/${id}`, { method: 'DELETE' }),
     getUsers: () => apiFetch(`${API_BASE}/users`),
-    adminCreateUser: (data) => apiFetch(`${API_BASE}/users`, { method: 'POST', body: JSON.stringify(data) }),
+    // Admin-only user creation. Backend exposes POST /auth/admin/create-user
+    // (the bare POST /users returns 405). Schema is in the admin Swagger.
+    adminCreateUser: (data) => apiFetch(`${API_BASE}/auth/admin/create-user`, { method: 'POST', body: JSON.stringify(data) }),
     deleteUser: (id) => apiFetch(`${API_BASE}/users/${id}`, { method: 'DELETE' }),
-    getTeamAnalytics: () => apiFetch(`${API_BASE}/team-analytics`),
-    getMatchAnalyses: () => apiFetch(`${API_BASE}/match-analyses`),
-    getRosters: () => apiFetch(`${API_BASE}/rosters`),
+
+    // 14. Media Posts (used by Media.jsx)
+    getPosts: () => apiFetch(`${API_BASE}/posts`),
+    getPostById: (id) => apiFetch(`${API_BASE}/posts/${id}`),
+    createPost: (data) => apiFetch(`${API_BASE}/posts`, { method: 'POST', body: JSON.stringify(data) }),
+    updatePost: (id, data) => apiFetch(`${API_BASE}/posts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deletePost: (id) => apiFetch(`${API_BASE}/posts/${id}`, { method: 'DELETE' }),
+
+    // 15. Finance (used by Finance.jsx) — confirm exact paths in Swagger.
+    getTransactions: () => apiFetch(`${API_BASE}/transactions`),
+    getFinanceSummary: () => apiFetch(`${API_BASE}/finance/summary`),
+    createTransaction: (data) => apiFetch(`${API_BASE}/transactions`, { method: 'POST', body: JSON.stringify(data) }),
+    updateTransaction: (id, data) => apiFetch(`${API_BASE}/transactions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteTransaction: (id) => apiFetch(`${API_BASE}/transactions/${id}`, { method: 'DELETE' }),
+
+    // --- Machine Learning services ---
+    // ml-match-predictor (host :9000): POST /predict  with { home_team, away_team, referee_name }
+    // ml-player-rating   (host :9001): GET  /predict/{player_name}
+    ml: {
+        predictMatch: (payload) => apiFetch(`${ML_MATCH_BASE}/predict`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
+        ratePlayer: (playerName) => apiFetch(
+            `${ML_PLAYER_BASE}/predict/${encodeURIComponent(playerName)}`
+        ),
+    },
 };

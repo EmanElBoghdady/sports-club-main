@@ -9,9 +9,10 @@ import {
     Toast, 
     EmptyState 
 } from "@/src/components/shared/SharedComponents";
-import { Pencil } from "lucide-react";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
 
-// الحقول الخاصة بالـ Scouts
+
 const scoutFields = [
     { key: "username", label: "Username", required: true },
     { key: "email", label: "Email", type: "email", required: true },
@@ -90,21 +91,36 @@ export default function ScoutingOps() {
             } else if (tab === "reports") {
                 editItem ? await api.updateScoutReport(editItem.id, payload) : await api.createScoutReport(payload);
             } else if (tab === "outer-players") {
-                editItem ? await api.updateOuterPlayer(editItem.id, payload) : await api.addOuterPlayer(payload);
+                editItem ? await api.updateOuterPlayer(editItem.id, payload) : await api.createOuterPlayer(payload);
             } else if (tab === "outer-teams") {
                 editItem ? await api.updateOuterTeam(editItem.id, payload) : await api.createOuterTeam(payload);
             }
-            
+
             setToast({ msg: "Record saved successfully" });
             setShowModal(false);
             setEditItem(null);
             fetchData();
         } catch (err) {
             console.error("Scouting Save Error:", err);
-            setToast({ 
-                msg: err.message || "Failed to save record", 
-                type: "error" 
+            setToast({
+                msg: err.message || "Failed to save record",
+                type: "error"
             });
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!confirm("Delete this record? This action cannot be undone.")) return;
+        try {
+            if (tab === "scouts") await api.deleteScout(id);
+            else if (tab === "reports") await api.deleteScoutReport(id);
+            else if (tab === "outer-players") await api.deleteOuterPlayer(id);
+            else if (tab === "outer-teams") await api.deleteOuterTeam(id);
+            setToast({ msg: "Record deleted" });
+            fetchData();
+        } catch (err) {
+            console.error("Scouting Delete Error:", err);
+            setToast({ msg: err.message || "Failed to delete record", type: "error" });
         }
     };
 
@@ -175,8 +191,8 @@ export default function ScoutingOps() {
                                             </>
                                         )}
                                         <td className="px-6 py-4 flex gap-2">
-                                            <button onClick={() => { setEditItem(item); setShowModal(true); }} className="text-slate-500 hover:text-emerald-400 transition-colors">✏️</button>
-                                            <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-rose-400 transition-colors">🗑️</button>
+                                            <button onClick={() => { setEditItem(item); setShowModal(true); }} className="text-slate-500 hover:text-emerald-400 transition-colors"><AiFillEdit size={16} /></button>
+                                            <button onClick={() => handleDelete(item.id)} className="text-slate-500 hover:text-rose-400 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                         </td>
                                     </tr>
                                 ))}

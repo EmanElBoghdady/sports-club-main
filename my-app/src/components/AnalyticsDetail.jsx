@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { SPORTS } from "@/src/data/mockData";
 import { api } from "@/src/lib/api";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
 import { 
     FormModal, 
     SportBadge, 
@@ -196,8 +198,8 @@ export default function AnalyticsDetail() {
                                 {data.matchAnalyses.map(a => (
                                     <div key={a.id} className="bg-slate-950 rounded-2xl p-6 border border-slate-800 hover:border-emerald-500/30 transition-all group relative">
                                         <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => { setEditItem(a); setShowModal(true); }} className="p-1.5 bg-slate-800 hover:bg-emerald-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Edit">✏️</button>
-                                            <button onClick={() => handleDelete(a.id)} className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Delete">🗑️</button>
+                                            <button onClick={() => { setEditItem(a); setShowModal(true); }} className="p-1.5 bg-slate-800 hover:bg-emerald-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Edit"><AiFillEdit size={14} /></button>
+                                            <button onClick={() => handleDelete(a.id)} className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Delete"><RiDeleteBin6Line size={14} /></button>
                                         </div>
                                         <div className="flex justify-between mb-5">
                                             <div>
@@ -242,8 +244,8 @@ export default function AnalyticsDetail() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex gap-3">
-                                                        <button onClick={() => { setEditItem(pa); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                        <button onClick={() => handleDelete(pa.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                        <button onClick={() => { setEditItem(pa); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                        <button onClick={() => handleDelete(pa.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -260,8 +262,8 @@ export default function AnalyticsDetail() {
                                 {data.teamAnalytics.map(ta => (
                                     <div key={ta.id} className="bg-slate-950 rounded-2xl p-6 border border-slate-800 hover:border-blue-500/30 transition-all group relative">
                                         <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => { setEditItem(ta); setShowModal(true); }} className="p-1.5 bg-slate-800 hover:bg-emerald-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Edit">✏️</button>
-                                            <button onClick={() => handleDelete(ta.id)} className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Delete">🗑️</button>
+                                            <button onClick={() => { setEditItem(ta); setShowModal(true); }} className="p-1.5 bg-slate-800 hover:bg-emerald-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Edit"><AiFillEdit size={14} /></button>
+                                            <button onClick={() => handleDelete(ta.id)} className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Delete"><RiDeleteBin6Line size={14} /></button>
                                         </div>
                                         <div className="flex justify-between mb-6">
                                             <div>
@@ -313,8 +315,8 @@ export default function AnalyticsDetail() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex gap-3">
-                                                        <button onClick={() => { setEditItem(ta); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                        <button onClick={() => handleDelete(ta.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                        <button onClick={() => { setEditItem(ta); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                        <button onClick={() => handleDelete(ta.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                                     </div>
                                                 </td>
                                             </tr>

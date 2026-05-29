@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { FaTrophy, FaMapMarkerAlt } from "react-icons/fa";
+import { FiAward, FiMapPin } from "react-icons/fi";
 
 const SPORT_TYPES = ["FOOTBALL", "BASKETBALL", "HANDBALL", "VOLLEYBALL", "TENNIS"];
 const MATCH_TYPES = ["LEAGUE", "CUP", "FRIENDLY", "PLAYOFF"];
@@ -88,7 +88,7 @@ export default function MatchModal({ open, onClose, onAddMatch, initialData }) {
         {/* Header */}
         <div className="flex items-center gap-4 px-6 pt-6 pb-5 border-b border-slate-800">
           <div className="bg-emerald-500/10 text-emerald-500 rounded-xl p-2.5 border border-emerald-500/20">
-            <FaTrophy size={18} />
+            <FiAward size={18} strokeWidth={2.4} />
           </div>
           <div>
             <h2 className="font-black text-slate-100 text-xl uppercase tracking-tight">{initialData ? "Edit Match" : "Schedule Match"}</h2>
@@ -130,7 +130,7 @@ export default function MatchModal({ open, onClose, onAddMatch, initialData }) {
 
           <Field label="Venue / Stadium *" error={errors.venue} full>
             <div className="relative">
-              <FaMapMarkerAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+              <FiMapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" strokeWidth={2.2} />
               <input className={`${inputCls("venue")} pl-10`} placeholder="Main Stadium" value={form.venue} onChange={e => set("venue", e.target.value)} />
             </div>
           </Field>

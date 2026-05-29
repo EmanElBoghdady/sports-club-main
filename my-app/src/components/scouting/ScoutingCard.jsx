@@ -1,5 +1,5 @@
 import React from "react";
-import { FaStar, FaArrowUp } from "react-icons/fa";
+import { FiStar, FiArrowUp } from "react-icons/fi";
 
 export default function ScoutingCard({ player }) {
   return (
@@ -54,7 +54,7 @@ export default function ScoutingCard({ player }) {
         <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
           <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-1">Current Rating</p>
           <div className="flex items-center gap-2 font-black text-lg text-slate-100">
-            <FaStar className="text-amber-500 text-sm" />
+            <FiStar className="text-amber-500 text-sm" strokeWidth={2.4} />
             {player.rating}
           </div>
         </div>
@@ -62,7 +62,7 @@ export default function ScoutingCard({ player }) {
         <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50 text-right">
           <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-1">Potential</p>
           <div className="flex items-center justify-end gap-2 text-emerald-400 font-black text-lg">
-            <FaArrowUp className="text-sm" />
+            <FiArrowUp className="text-sm" strokeWidth={2.4} />
             {player.potential}
           </div>
         </div>

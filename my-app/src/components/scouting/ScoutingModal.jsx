@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { FaMagnifyingGlass } from "react-icons/fa6";
+import { FiSearch } from "react-icons/fi";
 import { api } from "@/src/lib/api";
 
 const defaultForm = {
@@ -142,7 +142,7 @@ export default function ScoutingModal({ open, onClose, onSaved, editData = null 
         {/* Header */}
         <div className="flex items-center gap-3 px-6 pt-5 pb-4 border-b border-slate-800">
           <div className={`border rounded-xl p-2 ${isEditMode ? "bg-amber-500/20 border-amber-500/30" : "bg-emerald-600/20 border-emerald-500/30"}`}>
-            <FaMagnifyingGlass className={isEditMode ? "text-amber-400" : "text-emerald-400"} size={16} />
+            <FiSearch className={isEditMode ? "text-amber-400" : "text-emerald-400"} size={16} strokeWidth={2.4} />
           </div>
           <div>
             <h2 className="font-black text-slate-100 text-lg uppercase tracking-widest">

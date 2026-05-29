@@ -1,10 +1,69 @@
 "use client";
 
-import { useState } from "react";
-// import toast from "react-hot-toast";
+import { useState, useEffect } from "react";
+
+const STORAGE_KEY = "user_profile";
+
+const DEFAULT_PROFILE = {
+  fullName: "",
+  email: "",
+  role: "",
+  phone: "",
+  bio: "",
+};
+
+// Decode a JWT payload without verifying the signature (display only).
+function decodeJwt(token) {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(decodeURIComponent(
+      atob(base64).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")
+    ));
+  } catch {
+    return {};
+  }
+}
+
+const ROLE_LABELS = {
+  admin: "Admin", sport_manager: "Sport Manager", team_manager: "Team Manager",
+  head_coach: "Head Coach", assistant_coach: "Assistant Coach", specific_coach: "Specific Coach",
+  fitness_coach: "Fitness Coach", performance_analyst: "Performance Analyst",
+  team_doctor: "Team Doctor", doctor: "Doctor", physiotherapist: "Physiotherapist",
+  scout: "Scout", sponsor: "Sponsor", fan: "Fan", player: "Player",
+  national_team: "National Team", staff: "Staff",
+};
 
 export default function ProfileTab() {
   const [image, setImage] = useState(null);
+  const [profile, setProfile] = useState(DEFAULT_PROFILE);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  useEffect(() => {
+    // 1) Start from values decoded out of the JWT in localStorage.
+    const token = localStorage.getItem("token") || "";
+    const claims = token ? decodeJwt(token) : {};
+    const role = (localStorage.getItem("user_role") || "").toLowerCase();
+    const fromJwt = {
+      fullName: claims.name || [claims.given_name, claims.family_name].filter(Boolean).join(" ") || claims.preferred_username || "",
+      email: claims.email || "",
+      role: ROLE_LABELS[role] || role.replace(/_/g, " ") || "",
+      phone: "",
+      bio: "",
+    };
+
+    // 2) Layer any locally-saved edits on top.
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    } catch {
+      // ignore corrupt storage
+    }
+
+    setProfile({ ...DEFAULT_PROFILE, ...fromJwt, ...saved });
+  }, []);
+
+  const set = (key, val) => setProfile((p) => ({ ...p, [key]: val }));
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -13,10 +72,31 @@ export default function ProfileTab() {
     }
   };
 
+  const handleSave = async (e) => {
+    e?.preventDefault?.();
+    setStatus(null);
 
+    if (!profile.fullName.trim() || !profile.email.trim()) {
+      setStatus({ type: "error", msg: "Name and email are required." });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // No /profile endpoint on the backend yet — persist locally so the
+      // form roundtrips while waiting for the backend to expose one.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+      await new Promise((r) => setTimeout(r, 300)); // tiny delay so the spinner is visible
+      setStatus({ type: "success", msg: "Profile saved." });
+    } catch (err) {
+      setStatus({ type: "error", msg: err.message || "Failed to save profile." });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="bg-slate-900/50 backdrop-blur-sm rounded-2xl border border-slate-800 p-8 shadow-2xl relative overflow-hidden">
+    <form onSubmit={handleSave} className="bg-slate-900/50 backdrop-blur-sm rounded-2xl border border-slate-800 p-8 shadow-2xl relative overflow-hidden">
       <div className="absolute -right-20 -top-20 w-80 h-80 bg-emerald-500/5 rounded-full blur-[100px]" />
 
       <div className="relative z-10">
@@ -66,7 +146,8 @@ export default function ProfileTab() {
             </label>
             <input
               type="text"
-              defaultValue="John Morrison"
+              value={profile.fullName}
+              onChange={(e) => set("fullName", e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-5 py-3 text-slate-100 text-sm font-medium focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all placeholder:text-slate-800"
             />
           </div>
@@ -77,7 +158,8 @@ export default function ProfileTab() {
             </label>
             <input
               type="email"
-              defaultValue="president@club.com"
+              value={profile.email}
+              onChange={(e) => set("email", e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-5 py-3 text-slate-100 text-sm font-medium focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all placeholder:text-slate-800"
             />
           </div>
@@ -88,7 +170,7 @@ export default function ProfileTab() {
             </label>
             <input
               type="text"
-              defaultValue="President"
+              value={profile.role}
               disabled
               className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-5 py-3 text-slate-500 text-sm font-black uppercase tracking-widest cursor-not-allowed opacity-50"
             />
@@ -100,7 +182,8 @@ export default function ProfileTab() {
             </label>
             <input
               type="text"
-              defaultValue="+1 (555) 123-4567"
+              value={profile.phone}
+              onChange={(e) => set("phone", e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-5 py-3 text-slate-100 text-sm font-medium focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all placeholder:text-slate-800"
             />
           </div>
@@ -111,23 +194,33 @@ export default function ProfileTab() {
           <textarea
             rows="4"
             placeholder="Tell us about yourself..."
+            value={profile.bio}
+            onChange={(e) => set("bio", e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-slate-100 text-sm font-medium focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/5 outline-none transition-all resize-none placeholder:text-slate-800"
           />
         </div>
 
-        {/* Save Button */}
-        <div className="mt-10">
+        {/* Save Button + Status */}
+        <div className="mt-10 flex items-center gap-4 flex-wrap">
           <button
-            className="bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 px-10 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-lg shadow-emerald-500/10 active:scale-95"
+            type="submit"
+            disabled={saving}
+            className="bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 px-10 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-lg shadow-emerald-500/10 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Changes
+            {saving ? "Saving..." : "Save Changes"}
           </button>
+
+          {status && (
+            <span
+              className={`text-[10px] font-black uppercase tracking-widest ${
+                status.type === "success" ? "text-emerald-400" : "text-rose-400"
+              }`}
+            >
+              {status.msg}
+            </span>
+          )}
         </div>
       </div>
-    </div>
+    </form>
   );
 }
-
-
-
-

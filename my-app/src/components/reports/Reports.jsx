@@ -1,8 +1,11 @@
 "use client"
 import React, { useState, useEffect, useCallback } from "react";
-import { FileText, Calendar, Download, TrendingUp, Eye, Users, Activity, DollarSign, Pencil, Trash2 } from "lucide-react";
+import { FileText, Calendar, Download, TrendingUp, Eye, Users, Activity, DollarSign } from "lucide-react";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
 import { api } from "@/src/lib/api";
 import ScoutingModal from "@/src/components/scouting/ScoutingModal";
+import useRole from "@/src/lib/useRole";
 
 const iconMap = {
   Performance: TrendingUp,
@@ -33,6 +36,7 @@ export default function ReportsPage() {
   const [showScoutModal, setShowScoutModal] = useState(false);
   const [editReport, setEditReport] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const { canEdit } = useRole();
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchReports = useCallback(async () => {
@@ -109,6 +113,42 @@ export default function ReportsPage() {
     }
   };
 
+  // ── Download ───────────────────────────────────────────────────────────────
+  // Builds a plain-text dump of the report and triggers a browser download.
+  // No PDF dependency — keeps the bundle slim. The .txt opens in any reader.
+  const handleDownload = (report) => {
+    const raw = report._raw || {};
+    const lines = [
+      `===========================================`,
+      `  ${report.title}`,
+      `  Category: ${report.category}`,
+      `  Generated: ${report.date}`,
+      `===========================================`,
+      ``,
+      `Description:`,
+      report.desc || "—",
+      ``,
+    ];
+
+    // Append any non-trivial raw fields so the export carries the full record.
+    Object.entries(raw).forEach(([k, v]) => {
+      if (v == null || v === "" || k.startsWith("_")) return;
+      if (typeof v === "object") return; // skip nested objects to keep it readable
+      lines.push(`${k}: ${v}`);
+    });
+
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const safeName = (report.title || "report").replace(/[^a-z0-9_-]+/gi, "_").toLowerCase();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName}_${report.category || "report"}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // ── Filters ────────────────────────────────────────────────────────────────
   const filteredReports = reports.filter(r => {
     const matchesSearch = r.title?.toLowerCase().includes(search.toLowerCase());
@@ -128,18 +168,19 @@ export default function ReportsPage() {
             <h1 className="text-4xl font-black text-white tracking-tight mb-2">Reports & Analytics</h1>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Official insights and statistics</p>
           </div>
-          <button
-            onClick={() => { setEditReport(null); setShowScoutModal(true); }}
-            className="px-6 py-3 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-900/20">
-            + New Scout Report
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => { setEditReport(null); setShowScoutModal(true); }}
+              className="px-6 py-3 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-900/20">
+              + New Scout Report
+            </button>
+          )}
         </div>
 
         {/* ── Stats Grid ───────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
             { title: "Total Reports",    value: reports.length,                                          icon: FileText,   color: "text-white" },
-            { title: "Team Analytics",   value: reports.filter(r => r.category === "Analytics").length,  icon: TrendingUp, color: "text-blue-400" },
             { title: "Match Analyses",   value: reports.filter(r => r.category === "Match").length,      icon: Activity,   color: "text-rose-400" },
             { title: "Scouting Reports", value: reports.filter(r => r.category === "Scouting").length,   icon: Eye,        color: "text-amber-400" },
           ].map((stat, i) => (
@@ -159,9 +200,9 @@ export default function ReportsPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search reports..."
-            className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-300 placeholder:text-slate-600 outline-none focus:border-emerald-500/50 transition-all w-64"
+            className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs text-slate-300 placeholder:text-slate-600 outline-none focus:border-emerald-500/50 transition-all w-3.5 "
           />
-          <div className="flex gap-2 p-1.5 bg-slate-950/50 border border-slate-800 rounded-xl flex-wrap">
+          <div className="flex gap-2 p-1.5 bg-slate-950/50 border border-slate-800 rounded-xl ">
             {categories.map(cat => (
               <button key={cat} onClick={() => setActiveTab(cat)}
                 className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
@@ -200,17 +241,16 @@ export default function ReportsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 z-10">
-                      {/* ✏️ Edit — فقط Scouting عنده مودال مخصص */}
-                      {isScout && (
+                      {canEdit && isScout && (
                         <button
                           onClick={() => handleEdit(report)}
                           title="Edit Report"
                           className="w-9 h-9 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center text-slate-500 hover:text-amber-400 hover:border-amber-500/40 transition-all">
-                          <Pencil size={14} />
+                          <AiFillEdit size={14} />
                         </button>
                       )}
 
-                      {/* 🗑️ Delete — على كل الأنواع */}
+                      {canEdit && (
                       <button
                         onClick={() => handleDelete(report)}
                         disabled={isDeleting}
@@ -218,8 +258,9 @@ export default function ReportsPage() {
                         className="w-9 h-9 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center text-slate-500 hover:text-red-400 hover:border-red-500/40 transition-all disabled:opacity-40">
                         {isDeleting
                           ? <span className="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                          : <Trash2 size={14} />}
+                          : <RiDeleteBin6Line size={14} />}
                       </button>
+                      )}
 
                       {/* Icon */}
                       <div className="w-10 h-10 bg-slate-950 rounded-2xl flex items-center justify-center text-slate-500 border border-white/5 shadow-inner group-hover:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
@@ -253,8 +294,10 @@ export default function ReportsPage() {
                   </div>
 
                   {/* ── Action ── */}
-                  <button className="w-full mt-auto inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-3.5 rounded-2xl bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-600 hover:text-white transition-all shadow-lg z-10">
-                    <Download size={16} /> Download PDF
+                  <button
+                    onClick={() => handleDownload(report)}
+                    className="w-full mt-auto inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-3.5 rounded-2xl bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-600 hover:text-white transition-all shadow-lg z-10">
+                    <Download size={16} /> Download Report
                   </button>
 
                   {/* Decor */}

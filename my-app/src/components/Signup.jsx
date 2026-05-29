@@ -11,7 +11,7 @@ import {
   ShieldCheckIcon,
   TrophyIcon,
 } from "@heroicons/react/24/outline";
-import { FaShieldAlt } from "react-icons/fa";
+import { FiShield } from "react-icons/fi";
 
 
 export default function Signup() {
@@ -42,9 +42,15 @@ export default function Signup() {
 
   useEffect(() => {
     fetch("http://localhost:8080/teams")
-      .then((r) => r.json())
-      .then((data) => setTeams(Array.isArray(data) ? data : []))
-      .catch(() => { });
+      .then((r) => {
+        if (!r.ok) throw new Error(`Teams API ${r.status}`);
+        return r.json();
+      })
+      .then((data) => setTeams(Array.isArray(data) ? data : (data?.content || [])))
+      .catch((err) => {
+        console.error("Failed to load teams:", err);
+        setError("Could not load team list — you can still sign up.");
+      });
   }, []);
 
   const handleSubmit = async (e) => {

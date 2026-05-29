@@ -5,6 +5,8 @@ import { api } from "@/src/lib/api";
 import {
     FormModal, StatusBadge, Avatar, StatCard, PageHeader, AddButton, Toast, EmptyState
 } from "@/src/components/shared/SharedComponents";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
 
 const ROLE_COLORS = {
     ADMIN: "text-red-400 bg-red-500/10 border-red-500/20",
@@ -43,8 +45,7 @@ export default function UserManagement() {
 
     const showToast = (msg, type = "success") => setToast({ msg, type });
 
-    // 1. تحميل البيانات عند فتح الصفحة
-    // داخل صفحة UserManagement.jsx
+
 
     const loadUsers = async () => {
         try {
@@ -56,12 +57,10 @@ export default function UserManagement() {
                 serverData = response.data;
             }
 
-            // دمج البيانات: لو اليوزر اللي كريتناه مش موجود في داتا السيرفر، نحافظ عليه في الـ State
             setData(prevData => {
-                // لو أول مرة نحمل، خد داتا السيرفر
+              
                 if (prevData.length <= 1) return serverData.length > 0 ? serverData : prevData;
 
-                // دمج الذكي: هات اللي في السيرفر + أي يوزر جديد "محلي" لسه مظهرش هناك
                 const serverIds = new Set(serverData.map(u => u.keycloakId || u.id));
                 const localOnly = prevData.filter(u => !serverIds.has(u.keycloakId || u.id));
 
@@ -75,12 +74,12 @@ export default function UserManagement() {
         }
     };
 
-    // تأكدي إن الـ useEffect بينادي loadUsers لما الـ roleFilter يتغير
+    
     useEffect(() => {
         loadUsers();
-    }, [roleFilter]); // هتعمل إعادة تحميل كل ما تغيري الفلتر
+    }, [roleFilter]); 
 
-    // 2. البحث والتصفية (Client-side)
+   
     const filtered = (data || []).filter(u =>
         (roleFilter === "ALL" || u.role === roleFilter) &&
         `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(search.toLowerCase())
@@ -91,7 +90,13 @@ export default function UserManagement() {
 
     const handleSave = async (form) => {
         try {
-            const payload = { ...form, age: Number(form.age), role: form.role?.toUpperCase() };
+            const payload = {
+                ...form,
+                age: Number(form.age) || 0,
+                experienceYears: Number(form.experienceYears) || 0,
+                favoriteTeamId: Number(form.favoriteTeamId) || 0,
+                role: form.role?.toUpperCase(),
+            };
             const res = await api.adminCreateUser(payload);
 
             if (res.keycloakId) {
@@ -107,19 +112,16 @@ export default function UserManagement() {
                     phoneNumber: form.phone || "N/A"
                 };
 
-                // ضيفيه في الأول
                 setData(prev => [newUser, ...prev]);
-
-                // استني 5 ثواني كاملين قبل ما تحاولي تسحبي الداتا من السيرفر
                 setTimeout(() => loadUsers(), 5000);
             }
             setShowModal(false);
         } catch (error) {
-            showToast("Save failed", "error");
+            console.error("User create error:", error);
+            showToast(error.message || "Save failed", "error");
         }
     };
-    // ... (باقي كود الـ Render
-    // 4. حذف مستخدم
+   
     const handleDelete = async (id) => {
         if (!confirm("Are you sure you want to delete this user?")) return;
         try {
@@ -206,12 +208,12 @@ export default function UserManagement() {
                                                 onClick={() => { setEditItem(u); setShowModal(true); }}
                                                 className="cursor-pointerp-2 rounded-lg text-slate-500 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90"
                                                 title="Edit"
-                                            >✏️</button>
+                                            ><AiFillEdit size={16} /></button>
                                             <button
                                                 onClick={() => handleDelete(u.id)}
                                                 className="cursor-pointer p-2 rounded-lg text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
                                                 title="Delete"
-                                            >🗑</button>
+                                            ><RiDeleteBin6Line size={16} /></button>
                                         </div>
                                     </td>
                                 </tr>
