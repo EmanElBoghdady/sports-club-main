@@ -8,7 +8,10 @@ import MatchesCard from './MatchesCard';
 import MatchModal from './MatchModal';
 import Filters from './Filters';
 import FormationBoard from '../FormationBoard';
-import { FaAward, FaCalendar, FaLifeRing, FaArrowUp, FaChessKnight } from 'react-icons/fa';
+import { FiAward, FiCalendar, FiAlertCircle, FiArrowUp, FiTarget } from 'react-icons/fi';
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
+import useRole from "@/src/lib/useRole";
 
 const formationFields = [
     { key: "teamId", label: "Team ID", type: "number", required: true },
@@ -60,6 +63,7 @@ const Matches = () => {
     const [toast, setToast] = useState(null);
     const [matchFilters, setMatchFilters] = useState({ sport: 'All' });
     const [viewBoardMatch, setViewBoardMatch] = useState(null);
+    const { canEdit } = useRole();
 
     const showToast = (msg, type = "success") => setToast({ msg, type });
 
@@ -192,11 +196,16 @@ const Matches = () => {
         ["reviews", "⭐ Reviews"]
     ];
 
-    // Filter Matches only
+    // Filter Matches only. Backend sends uppercase enum values (FOOTBALL,
+    // BASKETBALL, HANDBALL, …) while the filter buttons pass Title-Case
+    // labels — compare case-insensitively, with substring matching so
+    // localised variants ("Bàsquet", "Handbol") still resolve correctly.
     const filteredMatches = (data.matches || []).filter(item => {
         if (matchFilters.sport === 'All' || matchFilters.sport === 'All Sports') return true;
-        const sportStr = item.sportType || item.sport;
-        return sportStr === matchFilters.sport;
+        const sportRaw = String(item.sportType || item.sport || "").toLowerCase().trim();
+        const wanted = String(matchFilters.sport).toLowerCase().trim();
+        if (!sportRaw) return false;
+        return sportRaw === wanted || sportRaw.includes(wanted) || wanted.includes(sportRaw);
     });
 
     const liveMatches = filteredMatches.filter(m => m.status === "LIVE");
@@ -208,7 +217,7 @@ const Matches = () => {
             <PageHeader 
                 title="Match Hub" 
                 subtitle="Manage schedules, lineups, tactical formations, and match performance" 
-                action={<AddButton label={`+ Add ${tab.charAt(0).toUpperCase() + tab.slice(1, -1)}`} onClick={() => { setEditItem(null); setShowModal(true); }} />} 
+                action={canEdit ? <AddButton label={`+ Add ${tab.charAt(0).toUpperCase() + tab.slice(1, -1)}`} onClick={() => { setEditItem(null); setShowModal(true); }} /> : null}
             />
 
             <FilterTabs tabs={tabs} active={tab} onSelect={setTab} />
@@ -224,28 +233,28 @@ const Matches = () => {
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                                 <div className='bg-slate-950 rounded-2xl p-4 shadow-sm border border-slate-800 flex items-center gap-4'>
-                                    <FaAward className="text-3xl text-emerald-500 opacity-50" />
+                                    <FiAward className="text-3xl text-emerald-500 opacity-50" strokeWidth={2.2} />
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Matches</p>
                                         <p className="text-2xl font-black text-slate-100">{filteredMatches.length}</p>
                                     </div>
                                 </div>
                                 <div className='bg-slate-950 rounded-2xl p-4 shadow-sm border border-slate-800 flex items-center gap-4'>
-                                    <FaLifeRing className="text-3xl text-red-500 opacity-50 animate-pulse" />
+                                    <FiAlertCircle className="text-3xl text-red-500 opacity-50 animate-pulse" strokeWidth={2.2} />
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Live Now</p>
                                         <p className="text-2xl font-black text-slate-100">{liveMatches.length}</p>
                                     </div>
                                 </div>
                                 <div className='bg-slate-950 rounded-2xl p-4 shadow-sm border border-slate-800 flex items-center gap-4'>
-                                    <FaCalendar className="text-3xl text-blue-500 opacity-50" />
+                                    <FiCalendar className="text-3xl text-blue-500 opacity-50" strokeWidth={2.2} />
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Scheduled</p>
                                         <p className="text-2xl font-black text-slate-100">{scheduledMatches.length}</p>
                                     </div>
                                 </div>
                                 <div className='bg-slate-950 rounded-2xl p-4 shadow-sm border border-slate-800 flex items-center gap-4'>
-                                    <FaArrowUp className="text-3xl text-slate-500 opacity-50" />
+                                    <FiArrowUp className="text-3xl text-slate-500 opacity-50" strokeWidth={2.2} />
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Completed</p>
                                         <p className="text-2xl font-black text-slate-100">{completedMatches.length}</p>
@@ -279,12 +288,12 @@ const Matches = () => {
                             {data.formations.map(f => (
                                 <div key={f.id} className="relative border-l-4 border-emerald-500 rounded-xl p-5 bg-slate-900/50 border border-slate-800 shadow-sm hover:border-emerald-500/50 hover:bg-emerald-500/[0.02] transition-all group">
                                     <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { setEditItem(f); setShowModal(true); }} className="p-1.5 bg-slate-800 hover:bg-emerald-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Edit">✏️</button>
-                                        <button onClick={() => handleDelete(f.id)} className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Delete">🗑️</button>
+                                        <button onClick={() => { setEditItem(f); setShowModal(true); }} className="p-1.5 bg-slate-800 hover:bg-emerald-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Edit"><AiFillEdit size={14} /></button>
+                                        <button onClick={() => handleDelete(f.id)} className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all" title="Delete"><RiDeleteBin6Line size={14} /></button>
                                     </div>
                                     <div className="flex items-center gap-3 mb-5">
                                         <div className="bg-emerald-500/10 text-emerald-500 p-3 rounded-xl border border-emerald-500/20">
-                                            <FaChessKnight className="text-xl" />
+                                            <FiTarget className="text-xl" strokeWidth={2.4} />
                                         </div>
                                         <div>
                                             <h3 className="text-emerald-400 font-black text-lg">{f.formation || 'Untitled'}</h3>
@@ -340,8 +349,8 @@ const Matches = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex gap-3">
-                                                    <button onClick={() => { setEditItem(l); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                    <button onClick={() => handleDelete(l.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                    <button onClick={() => { setEditItem(l); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                    <button onClick={() => handleDelete(l.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -375,8 +384,8 @@ const Matches = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex gap-3">
-                                                    <button onClick={() => { setEditItem(e); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                    <button onClick={() => handleDelete(e.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                    <button onClick={() => { setEditItem(e); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                    <button onClick={() => handleDelete(e.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -413,8 +422,8 @@ const Matches = () => {
                                             <td className="px-6 py-4 text-slate-400 text-xs max-w-xs truncate">{r.tacticalAnalysis || r.strengths || r.weaknesses || 'No comments'}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex gap-3">
-                                                    <button onClick={() => { setEditItem(r); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                    <button onClick={() => handleDelete(r.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                    <button onClick={() => { setEditItem(r); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                    <button onClick={() => handleDelete(r.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -450,7 +459,7 @@ const Matches = () => {
                     <div className="bg-slate-950 rounded-2xl shadow-2xl w-full max-w-4xl relative border border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-900/50">
                             <h2 className="font-black text-slate-100 text-xl uppercase tracking-tight flex items-center gap-3">
-                                <FaChessKnight className="text-emerald-500" />
+                                <FiTarget className="text-emerald-500" strokeWidth={2.4} />
                                 Tactical Board
                                 <span className="text-sm font-medium text-slate-500 ml-2">Match #{viewBoardMatch.id}</span>
                             </h2>

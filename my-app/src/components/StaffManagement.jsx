@@ -3,8 +3,10 @@ import { useState, useEffect } from "react";
 import { STAFF_ROLES } from "@/src/data/mockData";
 import { api } from "@/src/lib/api";
 import { FormModal, PageHeader, AddButton, FilterTabs, Toast, EmptyState } from "@/src/components/shared/SharedComponents";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
 
-// ✅ Staff Fields - بدون keycloakId
+
 const staffFields = [
     { key: "username", label: "Username", placeholder: "johndoe", required: true },
     { key: "email", label: "Email", type: "email", placeholder: "staff@club.com" },
@@ -24,13 +26,13 @@ const staffFields = [
     { key: "coachingLicenseLevel", label: "License Level", placeholder: "UEFA Pro" },
 ];
 
-// ✅ Scout Fields - بدون userKeycloakId (بيتبعت auto)
+
 const scoutFields = [
     { key: "region", label: "Region", placeholder: "North Africa" },
     { key: "organizationName", label: "Organization", placeholder: "Agency name" },
 ];
 
-// ✅ Manager Fields - حسب الـ Swagger payload بالظبط
+
 const managerFields = [
     { key: "username", label: "Username", placeholder: "manager_01", required: true },
     { key: "email", label: "Email", type: "email", placeholder: "manager@club.com" },
@@ -38,7 +40,7 @@ const managerFields = [
     { key: "firstName", label: "First Name", placeholder: "John" },
     { key: "lastName", label: "Last Name", placeholder: "Doe" },
     { key: "age", label: "Age", type: "number" },
-    { key: "phone", label: "Phone", placeholder: "+201xxxxxxxxx" },
+    { key: "phone", label: "Phone", placeholder: "+34xxxxxxxxx" },
     { key: "address", label: "Address", placeholder: "City, Country", full: true },
     { key: "gender", label: "Gender", type: "select", options: ["MALE", "FEMALE"] },
     { key: "sportId", label: "Sport ID", type: "number" },
@@ -67,7 +69,6 @@ export default function StaffManagement() {
         try {
             if (tab === "staff") {
                 const response = await api.getStaff();
-                // بنجرب الداتا أولاً، لو مش موجودة بنشوف الـ content (عشان لو الـ API متغير)
                 setStaff(response.data || response.content || (Array.isArray(response) ? response : []));
             }
             else if (tab === "scouts") {
@@ -76,8 +77,7 @@ export default function StaffManagement() {
             }
             else if (tab === "managers") {
                 const response = await api.getSportManagers();
-                console.log("Managers Data Check:", response.data); // للتأكد إنها Array
-                setManagers(response.data || []);
+                setManagers(response.data || response.content || (Array.isArray(response) ? response : []));
             }
         } catch (err) {
             console.error("Fetch Error:", err);
@@ -91,31 +91,43 @@ export default function StaffManagement() {
 
     const handleSave = async (form) => {
         try {
+            // Keycloak username policy: alphanumeric + . _ - only; no spaces.
+            // Reject early with a clear toast rather than letting the backend
+            // return an opaque "error-username-invalid-character".
+            const username = (form.username || "").trim();
+            if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+                showToast("Username can only contain letters, numbers, . _ - (no spaces)", "error");
+                return;
+            }
+
             if (tab === "staff") {
+                // Schema sent by Swagger (POST /staff): all 19 fields below.
+                // preManagedTeams is List<String>; empty array is valid.
+                const spec = form.specialization || "General";
                 const payload = {
-                    username: form.username.trim(),
+                    username,
                     email: form.email.trim(),
-                    password: form.password || "123456",
+                    password: form.password || "Password123!",
                     firstName: form.firstName,
                     lastName: form.lastName,
                     age: Number(form.age) || 20,
-                    phone: String(form.phone),
-                    address: form.address || "Cairo",
+                    phone: String(form.phone || ""),
+                    address: form.address || "Barcelona",
                     gender: form.gender || "MALE",
-                    staffRole: form.staffRole || "HEAD_COACH",
                     sportId: Number(form.sportId) || 1,
                     teamId: Number(form.teamId) || 1,
+                    staffRole: form.staffRole || "HEAD_COACH",
                     teamManagerId: Number(form.teamManagerId) || 1,
-                    skillType: "Technical",
+                    skillType: form.skillType || "Technical",
                     yearsExperience: Number(form.yearsExperience) || 1,
-                    toolsUsed: "None",
+                    toolsUsed: form.toolsUsed || "None",
                     coachingLicenseLevel: form.coachingLicenseLevel || "None",
-                    specialization: form.specialization || "General",
-                    specialty: form.specialization || "General",
-                    preManagedTeams: ["string"]
+                    preManagedTeams: Array.isArray(form.preManagedTeams) ? form.preManagedTeams : [],
+                    specialization: spec,
+                    specialty: spec,
                 };
 
-                console.log("📦 Sending:", JSON.stringify(payload));
+                console.log("Sending staff payload:", payload);
 
                 editItem
                     ? await api.updateStaff(editItem.id, payload)
@@ -124,7 +136,6 @@ export default function StaffManagement() {
                 showToast(editItem ? "Staff updated" : "Staff added");
             }
             else if (tab === "scouts") {
-                // ✅ userKeycloakId بيتبعت auto من الـ backend — مش محتاجينه هنا
                 const payload = {
                     region: form.region || "",
                     organizationName: form.organizationName || "",
@@ -137,24 +148,23 @@ export default function StaffManagement() {
                 showToast("Scout saved");
 
             } else if (tab === "managers") {
-                // تجهيز الداتا وتحويل الأنواع (Casting)
+              
                 const payload = {
                     username: form.username.trim(),
                     email: form.email.trim(),
                     password: form.password,
                     firstName: form.firstName,
                     lastName: form.lastName,
-                    age: Number(form.age), // تحويل لـ Number
+                    age: Number(form.age), 
                     phone: String(form.phone),
                     address: form.address,
                     gender: form.gender,
-                    sportId: Number(form.sportId), // تحويل لـ Number
-                    // تحويل الـ String لـ Boolean حقيقي
+                    sportId: Number(form.sportId), 
+                
                     canManageAllTeams: form.canManageAllTeams === "true" || form.canManageAllTeams === true,
                 };
 
-                console.log("Final Clean Payload:", payload); // شوفي الفرق في الكونسول (الأرقام هتكون بلون مختلف)
-
+                console.log("Final Clean Payload:", payload); 
                 editItem
                     ? await api.updateSportManager(editItem.id, payload)
                     : await api.createSportManager(payload);
@@ -196,7 +206,7 @@ export default function StaffManagement() {
         ["managers", "👔 Managers"]
     ];
 
-    // ✅ Table headers حسب كل تاب
+    
     const tableHeaders = {
         staff: ["Member / Role", "Team Info", "Specialization", "Account", "Actions"],
         scouts: ["Region", "Organization", "Actions"],
@@ -229,7 +239,7 @@ export default function StaffManagement() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {/* ✅ Staff Rows */}
+                                {/*  Staff Rows */}
                                 {tab === "staff" && staff.map(s => (
                                     <tr key={s.id} className="border-b border-slate-900 hover:bg-white/[0.02] transition-all group">
                                         <td className="px-6 py-4">
@@ -253,40 +263,39 @@ export default function StaffManagement() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex gap-3">
-                                                <button onClick={() => { setEditItem(s); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                <button onClick={() => handleDelete(s.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                <button onClick={() => { setEditItem(s); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                <button onClick={() => handleDelete(s.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                             </div>
                                         </td>
                                     </tr>
                                 ))}
 
-                                {/* ✅ Scout Rows */}
+                                {/*  Scout Rows */}
                                 {tab === "scouts" && scouts.map(s => (
                                     <tr key={s.id} className="border-b border-slate-900 hover:bg-white/[0.02] transition-colors group">
                                         <td className="px-6 py-4 text-slate-200 text-sm font-bold group-hover:text-sky-400 transition-colors">{s.region}</td>
                                         <td className="px-6 py-4 text-slate-400 text-sm">{s.organizationName}</td>
                                         <td className="px-6 py-4">
                                             <div className="flex gap-3">
-                                                <button onClick={() => { setEditItem(s); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors">✏️</button>
-                                                <button onClick={() => handleDelete(s.id)} className="text-slate-500 hover:text-rose-500 transition-colors">🗑️</button>
+                                                <button onClick={() => { setEditItem(s); setShowModal(true); }} className="text-slate-500 hover:text-emerald-500 transition-colors"><AiFillEdit size={16} /></button>
+                                                <button onClick={() => handleDelete(s.id)} className="text-slate-500 hover:text-rose-500 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                             </div>
                                         </td>
                                     </tr>
                                 ))}
 
-                                {/* ✅ Manager Rows */}
+                                {/*  Manager Rows */}
                                 {tab === "managers" && managers.map((m, index) => (
                                     <tr
-                                        // استخدمنا الـ id ولو مكرر بنضيف الـ index عشان الـ React Key error
                                         key={m.id || index}
                                         className="border-b border-slate-900 hover:bg-white/[0.02] transition-colors group"
                                     >
                                         <td className="px-6 py-4">
                                             <div className="text-slate-100 font-bold group-hover:text-amber-400 transition-colors">
-                                                {/* التأكد من الحروف الكبيرة في firstName و lastName */}
+                                               
                                                 {m.firstName} {m.lastName}
                                             </div>
-                                            {/* عرض الـ Keycloak ID بخط صغير جداً لو حابة للتأكد */}
+                         
                                             <div className="text-slate-600 text-[9px] truncate max-w-[150px]">
                                                 UUID: {m.keycloakId}
                                             </div>
@@ -320,16 +329,15 @@ export default function StaffManagement() {
                                                     className="text-slate-500 hover:text-emerald-500 transition-colors"
                                                     title="Edit Manager"
                                                 >
-                                                    ✏️
+                                                    <AiFillEdit size={16} />
                                                 </button>
 
-                                                {/* تم تعطيل الحذف أو إخفاؤه لأن الـ Swagger لا يدعمه حالياً */}
                                                 <button
-                                                    onClick={() => alert("Delete not supported by API yet")}
-                                                    className="text-slate-800 cursor-not-allowed"
-                                                    title="Delete not available"
+                                                    onClick={() => handleDelete(m.id)}
+                                                    className="text-slate-500 hover:text-rose-500 transition-colors"
+                                                    title="Delete Manager"
                                                 >
-                                                    🗑️
+                                                    <RiDeleteBin6Line size={16} />
                                                 </button>
                                             </div>
                                         </td>

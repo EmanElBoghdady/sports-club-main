@@ -1,99 +1,155 @@
 "use client";
 import React, { useState } from "react";
-import { FaUser } from "react-icons/fa";
+import { FiUser } from "react-icons/fi";
 import { api } from "@/src/lib/api";
-const SPORTS = ["Football", "Basketball", "Handball"];
 
-const POSITIONS_BY_SPORT = {
-  Football: ["Goalkeeper", "Defender", "Midfielder", "Forward"],
-  Basketball: ["Point Guard", "Shooting Guard", "Small Forward", "Power Forward", "Center"],
-  Handball: ["Goalkeeper", "Left Wing", "Right Wing", "Left Back", "Right Back", "Centre Back", "Pivot"],
-};
+// Backend POST /players schema (from Swagger). 17 fields creating a
+// Keycloak user (PLAYER role) + player record in one call.
 
-const STATES = ["Fit", "Injured", "Suspended"];
-
-const NATIONALITIES = [
-  "Algerian", "Moroccan", "Tunisian", "Egyptian", "French",
-  "Spanish", "Brazilian", "Argentinian", "Italian", "Other",
+// Must match backend Position enum exactly (user-management/.../Position.java).
+// Handball entries are HB_ prefixed to avoid clash with Football wing/back names.
+const POSITIONS = [
+  // Football
+  "GOALKEEPER", "RIGHT_BACK", "LEFT_BACK", "CENTER_BACK",
+  "DEFENSIVE_MID", "CENTRAL_MID", "ATTACKING_MID",
+  "RIGHT_WING", "LEFT_WING", "STRIKER",
+  // Basketball
+  "POINT_GUARD", "SHOOTING_GUARD", "SMALL_FORWARD", "POWER_FORWARD", "CENTER",
+  // Tennis
+  "SINGLES_PLAYER", "DOUBLES_PLAYER",
+  // Volleyball
+  "SETTER", "OUTSIDE_HITTER", "OPPOSITE_HITTER", "MIDDLE_BLOCKER", "LIBERO", "DEFENSIVE_SPECIALIST",
+  // Handball
+  "HB_GOALKEEPER", "HB_LEFT_WING", "HB_RIGHT_WING",
+  "HB_LEFT_BACK", "HB_RIGHT_BACK", "HB_CENTRE_BACK", "HB_PIVOT",
+  // Swimming
+  "FREESTYLE_SWIMMER", "BACKSTROKE_SWIMMER", "BREASTSTROKE_SWIMMER",
+  "BUTTERFLY_SWIMMER", "MEDLEY_SWIMMER",
 ];
 
+const NATIONALITIES = [
+  "Spanish", "Catalan", "German", "Polish", "French",
+  "Portuguese", "Brazilian", "Argentinian", "Uruguayan", "Dutch",
+  "Italian", "English", "Czech", "Other",
+];
+
+const STATUSES = ["AVAILABLE", "INJURED", "SUSPENDED", "RETIRED"];
+
 const defaultForm = {
-  name: "",
-  sport: "",
-  position: "",
-  state: "Fit",
+  username: "",
+  email: "",
+  password: "",
+  firstName: "",
+  lastName: "",
   age: "",
-  nationality: "",
-  matches: "",
-  points: "",
-  rating: "",
+  phone: "",
+  address: "",
+  gender: "MALE",
+  dateOfBirth: "",
+  nationality: "Spanish",
+  preferredPosition: "STRIKER",
+  marketValue: "",
+  kitNumber: "",
+  rosterId: "0",
+  contractId: "0",
+  status: "AVAILABLE",
 };
+
+// Defined outside Modal so the input ref stays stable across re-renders.
+function Field({ label, error, children, full }) {
+  return (
+    <div className={`flex flex-col gap-2 ${full ? "col-span-2" : ""}`}>
+      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">
+        {label}
+      </label>
+      {children}
+      {error && (
+        <span className="text-red-500 text-[10px] font-bold uppercase tracking-wider ml-1">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function Modal({ open, onClose, onAddPlayer }) {
   const [form, setForm] = useState(defaultForm);
   const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
 
   if (!open) return null;
 
   const set = (key, val) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: val,
-      // reset position when sport changes
-      ...(key === "sport" ? { position: "" } : {}),
-    }));
+    setForm((prev) => ({ ...prev, [key]: val }));
     setErrors((prev) => ({ ...prev, [key]: "" }));
   };
 
   const validate = () => {
     const e = {};
-    if (!form.name.trim()) e.name = "Name is required";
-    if (!form.sport) e.sport = "Select a sport";
-    if (!form.position) e.position = "Select a position";
-    if (!form.age || isNaN(form.age) || +form.age < 14 || +form.age > 50)
-      e.age = "Valid age (14–50)";
-    if (!form.nationality) e.nationality = "Select nationality";
-    if (form.rating !== "" && (isNaN(form.rating) || +form.rating < 0 || +form.rating > 10))
-      e.rating = "Rating 0–10";
+    const username = (form.username || "").trim();
+    if (!username) e.username = "Required";
+    // Keycloak username policy: letters, digits, dot, underscore, dash only.
+    else if (!/^[a-zA-Z0-9._-]+$/.test(username)) e.username = "No spaces / special chars (use . _ - only)";
+    if (!form.email.trim() || !form.email.includes("@")) e.email = "Valid email required";
+    if (!form.password || form.password.length < 8) e.password = "Min 8 chars";
+    if (!form.firstName.trim()) e.firstName = "Required";
+    if (!form.lastName.trim()) e.lastName = "Required";
+    const age = Number(form.age);
+    if (!age || age < 14 || age > 50) e.age = "Age 14–50";
+    if (!form.phone.trim()) e.phone = "Required";
+    if (!form.dateOfBirth) e.dateOfBirth = "Required";
+    if (!form.kitNumber || Number(form.kitNumber) < 1 || Number(form.kitNumber) > 99) {
+      e.kitNumber = "Kit 1–99";
+    }
     return e;
   };
 
   const handleSubmit = async () => {
-    // تجميع البيانات المهمة فقط للسيرفر
+    const e = validate();
+    if (Object.keys(e).length > 0) {
+      setErrors(e);
+      return;
+    }
+
     const payload = {
-      dateOfBirth: form.dateOfBirth || "2003-01-01",
-      nationality: form.nationality || "Egyptian",
-      preferredPosition: (form.position || "FORWARD").toUpperCase().replace(/\s+/g, '_'),
-      marketValue: Number(form.points) || 0, // الجولز
-      kitNumber: Number(form.matches) || 0,  // الماتشات
-      outerTeamId: 1 // قيمة ثابتة طالما شلنا الحالة
+      username: form.username.trim(),
+      email: form.email.trim(),
+      password: form.password,
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      age: Number(form.age),
+      phone: form.phone.trim(),
+      address: form.address.trim() || "N/A",
+      gender: form.gender,
+      dateOfBirth: form.dateOfBirth,
+      nationality: form.nationality,
+      preferredPosition: form.preferredPosition,
+      marketValue: Number(form.marketValue) || 0,
+      kitNumber: Number(form.kitNumber),
+      rosterId: Number(form.rosterId) || 0,
+      contractId: Number(form.contractId) || 0,
+      status: form.status,
     };
 
+    setSubmitting(true);
     try {
-      await api.createOuterPlayer(payload);
+      await api.createPlayer(payload);
       if (onAddPlayer) await onAddPlayer();
       handleClose();
-      alert("✅ Player Saved!");
+      alert("Player created successfully.");
     } catch (err) {
-      console.error("Submission error:", err.response?.data);
-      alert("Error saving player. Please check the fields.");
+      console.error("Create player error:", err);
+      alert(err.message || "Failed to create player. Check the fields and try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
+
   const handleClose = () => {
     setForm(defaultForm);
     setErrors({});
     onClose();
   };
-
-  const Field = ({ label, error, children }) => (
-    <div className="flex flex-col gap-2">
-      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">
-        {label}
-      </label>
-      {children}
-      {error && <span className="text-red-500 text-[10px] font-bold uppercase tracking-wider ml-1">{error}</span>}
-    </div>
-  );
 
   const inputCls = (key) =>
     `bg-slate-900/50 border rounded-xl px-4 py-3 text-sm text-slate-200 outline-none transition-all w-full placeholder:text-slate-600
@@ -103,17 +159,17 @@ export default function Modal({ open, onClose, onAddPlayer }) {
     }`;
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-      <div className="bg-slate-950 rounded-2xl shadow-2xl w-full max-w-lg relative animate-in fade-in zoom-in-95 duration-200 border border-slate-800">
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-100 p-4">
+      <div className="bg-slate-950 rounded-2xl shadow-2xl w-full max-w-2xl relative border border-slate-800">
 
         {/* Header */}
         <div className="flex items-center gap-4 px-6 pt-6 pb-5 border-b border-slate-800">
           <div className="bg-emerald-500/10 text-emerald-500 rounded-xl p-2.5 border border-emerald-500/20">
-            <FaUser size={18} />
+            <FiUser size={18} strokeWidth={2.4} />
           </div>
           <div>
-            <h2 className="font-black text-slate-100 text-xl uppercase tracking-tight">Add New Player</h2>
-            <p className="text-slate-500 text-xs font-medium">Fill in the player's details below</p>
+            <h2 className="font-black text-slate-100 text-xl uppercase tracking-tight">Register New Player</h2>
+            <p className="text-slate-500 text-xs font-medium">Creates a Keycloak user + player record</p>
           </div>
           <button
             onClick={handleClose}
@@ -124,104 +180,87 @@ export default function Modal({ open, onClose, onAddPlayer }) {
         </div>
 
         {/* Form */}
-        <div className="px-6 py-6 grid grid-cols-2 gap-5 max-h-[70vh] overflow-y-auto custom-scrollbar" >
+        <div className="px-6 py-6 grid grid-cols-2 gap-5 max-h-[70vh] overflow-y-auto">
 
-          {/* Full name – full width */}
-          <div className="col-span-2">
-            <Field label="Full Name" error={errors.name}>
-              <input
-                className={inputCls("name")}
-                placeholder="e.g. Youcef Atal"
-                value={form.name}
-                onChange={(e) => set("name", e.target.value)}
-              />
-            </Field>
-          </div>
+          {/* --- Account --- */}
+          <Field label="Username *" error={errors.username}>
+            <input className={inputCls("username")} placeholder="player01" value={form.username} onChange={(e) => set("username", e.target.value)} />
+          </Field>
 
-          {/* Sport */}
-          <Field label="Sport" error={errors.sport}>
-            <select className={inputCls("sport")} value={form.sport} onChange={(e) => set("sport", e.target.value)}>
-              <option value="" className="bg-slate-950">Select sport</option>
-              {SPORTS.map((s) => <option key={s} className="bg-slate-950">{s}</option>)}
+          <Field label="Email *" error={errors.email}>
+            <input type="email" className={inputCls("email")} placeholder="player@club.com" value={form.email} onChange={(e) => set("email", e.target.value)} />
+          </Field>
+
+          <Field label="Password (min 8) *" error={errors.password} full>
+            <input type="password" className={inputCls("password")} placeholder="At least 8 characters" value={form.password} onChange={(e) => set("password", e.target.value)} />
+          </Field>
+
+          {/* --- Personal --- */}
+          <Field label="First Name *" error={errors.firstName}>
+            <input className={inputCls("firstName")} placeholder="John" value={form.firstName} onChange={(e) => set("firstName", e.target.value)} />
+          </Field>
+
+          <Field label="Last Name *" error={errors.lastName}>
+            <input className={inputCls("lastName")} placeholder="Doe" value={form.lastName} onChange={(e) => set("lastName", e.target.value)} />
+          </Field>
+
+          <Field label="Age *" error={errors.age}>
+            <input type="number" min={14} max={50} className={inputCls("age")} placeholder="24" value={form.age} onChange={(e) => set("age", e.target.value)} />
+          </Field>
+
+          <Field label="Gender" error={errors.gender}>
+            <select className={inputCls("gender")} value={form.gender} onChange={(e) => set("gender", e.target.value)}>
+              <option value="MALE" className="bg-slate-950">MALE</option>
+              <option value="FEMALE" className="bg-slate-950">FEMALE</option>
             </select>
           </Field>
 
-          {/* Position – depends on sport */}
-          <Field label="Position" error={errors.position}>
-            <select
-              className={inputCls("position")}
-              value={form.position}
-              onChange={(e) => set("position", e.target.value)}
-              disabled={!form.sport}
-            >
-              <option value="" className="bg-slate-950">Select position</option>
-              {(POSITIONS_BY_SPORT[form.sport] || []).map((p) => <option key={p} className="bg-slate-950">{p}</option>)}
-            </select>
+          <Field label="Phone *" error={errors.phone}>
+            <input className={inputCls("phone")} placeholder="+34xxxxxxxxx" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
           </Field>
 
+          <Field label="Date of Birth *" error={errors.dateOfBirth}>
+            <input type="date" className={inputCls("dateOfBirth")} value={form.dateOfBirth} onChange={(e) => set("dateOfBirth", e.target.value)} />
+          </Field>
 
-          {/* Nationality */}
+          <Field label="Address" error={errors.address} full>
+            <input className={inputCls("address")} placeholder="City, Country" value={form.address} onChange={(e) => set("address", e.target.value)} />
+          </Field>
+
           <Field label="Nationality" error={errors.nationality}>
             <select className={inputCls("nationality")} value={form.nationality} onChange={(e) => set("nationality", e.target.value)}>
-              <option value="" className="bg-slate-950">Select nationality</option>
-              {NATIONALITIES.map((n) => <option key={n} className="bg-slate-950">{n}</option>)}
+              {NATIONALITIES.map((n) => <option key={n} value={n} className="bg-slate-950">{n}</option>)}
             </select>
           </Field>
 
-          {/* Age */}
-          <Field label="Age" error={errors.age}>
-            <input
-              type="number"
-              className={inputCls("age")}
-              placeholder="e.g. 24"
-              min={14} max={50}
-              value={form.age}
-              onChange={(e) => set("age", e.target.value)}
-            />
+          {/* --- Player specifics --- */}
+          <Field label="Preferred Position" error={errors.preferredPosition}>
+            <select className={inputCls("preferredPosition")} value={form.preferredPosition} onChange={(e) => set("preferredPosition", e.target.value)}>
+              {POSITIONS.map((p) => <option key={p} value={p} className="bg-slate-950">{p}</option>)}
+            </select>
           </Field>
 
-          {/* Matches */}
-          <Field label="Matches" error={errors.matches}>
-            <input
-              type="number"
-              className={inputCls("matches")}
-              placeholder="e.g. 20"
-              min={0}
-              value={form.matches}
-              onChange={(e) => set("matches", e.target.value)}
-            />
+          <Field label="Kit Number * (1–99)" error={errors.kitNumber}>
+            <input type="number" min={1} max={99} className={inputCls("kitNumber")} placeholder="10" value={form.kitNumber} onChange={(e) => set("kitNumber", e.target.value)} />
           </Field>
 
-          {/* Points / Goals */}
-          <Field label="Goals / Points" error={errors.points}>
-            <input
-              type="number"
-              className={inputCls("points")}
-              placeholder="e.g. 8"
-              min={0}
-              value={form.points}
-              onChange={(e) => set("points", e.target.value)}
-            />
+          <Field label="Market Value (€)" error={errors.marketValue}>
+            <input type="number" min={0} className={inputCls("marketValue")} placeholder="0" value={form.marketValue} onChange={(e) => set("marketValue", e.target.value)} />
           </Field>
 
-          {/* Rating */}
-          <div className="col-span-2">
-            <Field label="Performance Rating (0–10)" error={errors.rating}>
-              <div className="flex items-center gap-4 bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                <input
-                  type="range"
-                  min={0} max={10} step={0.1}
-                  value={form.rating || 0}
-                  onChange={(e) => set("rating", e.target.value)}
-                  className="flex-1 accent-emerald-500 cursor-pointer h-1.5 bg-slate-800 rounded-full appearance-none"
-                />
-                <span className={`text-lg font-black w-12 text-center
-                  ${+form.rating >= 7 ? "text-emerald-500" : +form.rating >= 5 ? "text-amber-500" : "text-red-500"}`}>
-                  {form.rating || "0"}
-                </span>
-              </div>
-            </Field>
-          </div>
+          <Field label="Status" error={errors.status}>
+            <select className={inputCls("status")} value={form.status} onChange={(e) => set("status", e.target.value)}>
+              {STATUSES.map((s) => <option key={s} value={s} className="bg-slate-950">{s}</option>)}
+            </select>
+          </Field>
+
+          <Field label="Roster ID (0 = none)" error={errors.rosterId}>
+            <input type="number" min={0} className={inputCls("rosterId")} placeholder="0" value={form.rosterId} onChange={(e) => set("rosterId", e.target.value)} />
+          </Field>
+
+          <Field label="Contract ID (0 = none)" error={errors.contractId}>
+            <input type="number" min={0} className={inputCls("contractId")} placeholder="0" value={form.contractId} onChange={(e) => set("contractId", e.target.value)} />
+          </Field>
 
         </div>
 
@@ -229,15 +268,17 @@ export default function Modal({ open, onClose, onAddPlayer }) {
         <div className="flex gap-4 px-6 py-6 border-t border-slate-800">
           <button
             onClick={handleClose}
-            className="flex-1 py-3 rounded-xl border border-slate-800 text-slate-400 text-xs font-bold uppercase tracking-widest hover:bg-slate-900 hover:text-slate-200 cursor-pointer transition-all"
+            disabled={submitting}
+            className="flex-1 py-3 rounded-xl border border-slate-800 text-slate-400 text-xs font-bold uppercase tracking-widest hover:bg-slate-900 hover:text-slate-200 cursor-pointer transition-all disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
-            className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-500 active:scale-[0.98] transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
+            disabled={submitting}
+            className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-500 active:scale-[0.98] transition-all cursor-pointer shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Register Player
+            {submitting ? "Creating..." : "Create Player"}
           </button>
         </div>
 

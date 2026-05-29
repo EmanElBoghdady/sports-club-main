@@ -11,7 +11,7 @@ const SEV_COLOR = {
     CRITICAL: "text-red-600 bg-red-50 border-red-200" 
 };
 
-// ... (الحقول ثابتة كما هي في الكود الخاص بكِ)
+
 
 const STEPS = [
     ["injuries", "1. Injury"], ["diagnoses", "2. Diagnosis"], 
@@ -26,7 +26,7 @@ export default function MedicalRecords() {
     const [showModal, setShowModal] = useState(false);
     const [toast, setToast] = useState(null);
 
-    // 1. جلب البيانات بناءً على التبويب النشط
+   
     const loadCurrentTab = async () => {
         setLoading(true);
         try {
@@ -49,7 +49,7 @@ export default function MedicalRecords() {
         loadCurrentTab();
     }, [tab]);
 
-    // 2. معالجة الحفظ لكل نوع
+  
     const handleSave = async (form) => {
         try {
             if (tab === "injuries") await api.createInjury(form);
@@ -112,7 +112,7 @@ export default function MedicalRecords() {
                         </div>
                     ))}
                     
-                    {/* ... (باقي التبويبات تتبع نفس النمط باستخدام بيانات من data[tab]) ... */}
+                  
                     
                     {data[tab]?.length === 0 && <EmptyState icon="📂" title={`No ${tab} records found`} />}
                 </div>

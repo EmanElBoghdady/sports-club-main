@@ -11,7 +11,7 @@ import {
   ShieldCheckIcon,
   TrophyIcon,
 } from "@heroicons/react/24/outline";
-import { setToken } from "@/src/lib/auth"; // تأكدي من أن المسار صحيح
+import { setToken } from "@/src/lib/auth"; 
 import { jwtDecode } from "jwt-decode";
 import Cookies from "js-cookie";
 
@@ -44,38 +44,39 @@ export default function Login() {
       }
 
       if (data.access_token) {
-        // 1. تخزين التوكن الأصلي
+      
         setToken(data.access_token);
 
-        // 2. فك التوكن لاستخراج المعلومات
+       
         const decoded = jwtDecode(data.access_token);
         console.log("Decoded Content:", decoded);
 
-        // استخراج الـ Role من المسار الصحيح في Keycloak
-        // لاحظي أن الأدوار تأتي في مصفوفة [ "ADMIN" ]، لذا نأخذ العنصر الأول
         const rawRole = decoded.realm_access?.roles?.[0] || "fan";
-
-        // تحويله لـ lowercase ليتناسب مع مقارنات السايد بار والميدل وير (admin)
         const userRole = rawRole.toLowerCase();
 
-        console.log("Extracted Role:", userRole); // سيظهر لك "admin"
+        // Persist Keycloak user id (JWT "sub") so other pages
+        // (Messages, ProfileTab, ...) can use it for filtering.
+        if (decoded.sub) {
+          localStorage.setItem("keycloakId", decoded.sub);
+        }
 
-        // التخزين
         localStorage.setItem("user_role", userRole);
         Cookies.set("user_role", userRole, { expires: 7, path: "/" });
 
-        console.log("الـ Role اللي هيتخزن:", userRole);
         localStorage.setItem(
           "user_info",
           JSON.stringify({
             username: username,
+            keycloakId: decoded.sub,
+            email: decoded.email,
+            name: decoded.name,
             loginTime: new Date().toISOString(),
           }),
         );
 
         console.log("Login success! Redirecting...");
 
-        // 5. التحويل باستخدام window.location لضمان قراءة الكوكيز فوراً
+      
         window.location.href = "/dashboard";
       } else {
         setError("Token not received from server");
@@ -91,7 +92,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen relative overflow-hidden flex">
-      {/* القسم الأيسر - الصورة والمميزات */}
+ 
       <div className="hidden lg:flex lg:w-[55%] relative">
         <Image
           src="/sportify/yy.jpg"
@@ -115,8 +116,8 @@ export default function Login() {
               height={100}
               className="object-contain"
             />
-            <span className="text-7xl font-black italic bg-gradient-to-r from-emerald-500 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
-              Sportify
+            <span className="text-7xl font-black italic bg-gradient-to-r from-emerald-500 via-teal-300 to-cyan-300 bg-clip-text text-transparent w-100">
+              Sportify 
             </span>
           </motion.div>
 
@@ -158,7 +159,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* القسم الأيمن - فورم اللوجين */}
+    
       <motion.div
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -228,7 +229,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold shadow-lg shadow-emerald-900/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold shadow-lg shadow-emerald-900/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 text-xl"
             >
               {loading ? "Connecting..." : "Sign In"}
             </button>

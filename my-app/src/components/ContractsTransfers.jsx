@@ -11,7 +11,8 @@ import {
     Toast, 
     EmptyState 
 } from "@/src/components/shared/SharedComponents";
-import { Pencil, Trash2 } from "lucide-react";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
 
 // ─── SCHEMAS MATCHING YOUR JSON ───────────────────────────────────────────────
 
@@ -23,18 +24,22 @@ const contractFields = [
     { key: "releaseClause", label: "Release Clause", type: "number", required: true },
 ];
 
+const REQUEST_STATUS = ["PENDING", "ACCEPTED", "DECLINED"];
+
 const incomingFields = [
-    { key: "outerPlayerId", label: "Outer Player ID", type: "number", required: true },
+    { key: "outerPlayerId",   label: "Outer Player ID",    type: "number", required: true },
     { key: "fromOuterTeamId", label: "From Outer Team ID", type: "number", required: true },
-    { key: "toTeamId", label: "To Team ID", type: "number", required: true },
-    { key: "requestDate", label: "Request Date", type: "date", required: true },
+    { key: "toTeamId",        label: "To Our Team ID",     type: "number", required: true },
+    { key: "requestDate",     label: "Request Date",       type: "date",   required: true },
+    { key: "status",          label: "Status",             type: "select", options: REQUEST_STATUS },
 ];
 
 const outgoingFields = [
     { key: "playerKeycloakId", label: "Player Keycloak ID", placeholder: "uuid...", required: true },
-    { key: "fromTeamId", label: "From Team ID", type: "number", required: true },
-    { key: "toOuterTeamId", label: "To Outer Team ID", type: "number", required: true },
-    { key: "requestDate", label: "Request Date", type: "date", required: true },
+    { key: "fromTeamId",       label: "From Our Team ID",   type: "number", required: true },
+    { key: "toOuterTeamId",    label: "To Outer Team ID",   type: "number", required: true },
+    { key: "requestDate",      label: "Request Date",       type: "date",   required: true },
+    { key: "status",           label: "Status",             type: "select", options: REQUEST_STATUS },
 ];
 
 export default function ContractsTransfers() {
@@ -72,24 +77,46 @@ export default function ContractsTransfers() {
     const handleSave = async (form) => {
         try {
             const payload = { ...form };
-            
-            // Cast only the fields required by the schema
-            const numKeys = ["salary", "releaseClause", "outerPlayerId", "fromOuterTeamId", "toTeamId", "fromTeamId", "toOuterTeamId"];
-            numKeys.forEach(k => {
+
+            // Cast IDs / money to numbers (Spring rejects "" / strings here).
+            ["salary", "releaseClause", "outerPlayerId", "fromOuterTeamId",
+             "toTeamId", "fromTeamId", "toOuterTeamId"].forEach((k) => {
                 if (payload[k] !== undefined && payload[k] !== "" && payload[k] !== null) {
                     payload[k] = Number(payload[k]);
                 }
             });
 
-            // Clean up payload to only include keys in the schema (Prevent unknown properties error)
-            const schemaKeys = tab === "contracts" 
-                ? ["playerKeycloakId", "startDate", "endDate", "salary", "releaseClause"]
-                : tab === "incoming"
-                ? ["outerPlayerId", "fromOuterTeamId", "toTeamId", "requestDate"]
-                : ["playerKeycloakId", "fromTeamId", "toOuterTeamId", "requestDate"];
-
-            const finalPayload = {};
-            schemaKeys.forEach(k => { if (payload[k] !== undefined) finalPayload[k] = payload[k]; });
+            // Build the body matching the JPA entity shape:
+            //   PlayerTransferIncoming  → outerPlayer / fromTeam (OuterTeam) / toTeam (Team)
+            //   PlayerTransferOutgoing  → playerKeycloakId / fromTeam (Team) / toTeam (OuterTeam)
+            // The earlier flat-ID payload was silently rejected, so no rows
+            // ever made it past Hibernate.
+            let finalPayload;
+            if (tab === "contracts") {
+                finalPayload = {
+                    playerKeycloakId: payload.playerKeycloakId,
+                    startDate:        payload.startDate,
+                    endDate:          payload.endDate,
+                    salary:           payload.salary,
+                    releaseClause:    payload.releaseClause,
+                };
+            } else if (tab === "incoming") {
+                finalPayload = {
+                    outerPlayer: payload.outerPlayerId   ? { id: payload.outerPlayerId }   : undefined,
+                    fromTeam:    payload.fromOuterTeamId ? { id: payload.fromOuterTeamId } : undefined,
+                    toTeam:      payload.toTeamId        ? { id: payload.toTeamId }        : undefined,
+                    requestDate: payload.requestDate,
+                    status:      payload.status || "PENDING",
+                };
+            } else {
+                finalPayload = {
+                    playerKeycloakId: payload.playerKeycloakId,
+                    fromTeam:    payload.fromTeamId      ? { id: payload.fromTeamId }      : undefined,
+                    toTeam:      payload.toOuterTeamId   ? { id: payload.toOuterTeamId }   : undefined,
+                    requestDate: payload.requestDate,
+                    status:      payload.status || "PENDING",
+                };
+            }
 
             let res;
             if (tab === "contracts") {
@@ -174,8 +201,8 @@ export default function ContractsTransfers() {
                                             <td className="px-6 py-4 text-sm text-slate-300">${c.releaseClause?.toLocaleString()}</td>
                                             <td className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">{c.startDate} → {c.endDate}</td>
                                             <td className="px-6 py-4 flex gap-2">
-                                                <button onClick={() => { setEditItem(c); setShowModal(true); }} className="p-2 text-slate-500 hover:text-emerald-400"><Pencil size={14}/></button>
-                                                <button onClick={() => handleDelete(c.id)} className="p-2 text-slate-500 hover:text-rose-400"><Trash2 size={14}/></button>
+                                                <button onClick={() => { setEditItem(c); setShowModal(true); }} className="p-2 text-slate-500 hover:text-emerald-400"><AiFillEdit size={14}/></button>
+                                                <button onClick={() => handleDelete(c.id)} className="p-2 text-slate-500 hover:text-rose-400"><RiDeleteBin6Line size={14}/></button>
                                             </td>
                                         </tr>
                                     ))}
@@ -188,7 +215,7 @@ export default function ContractsTransfers() {
                             <table className="w-full text-left">
                                 <thead className="bg-slate-900/20">
                                     <tr className="border-b border-slate-800">
-                                        {["Outer Player", "From Outer Team", "To Our Team", "Request Date", "Actions"].map(h => (
+                                        {["Outer Player", "From (Outer Team)", "To (Our Team)", "Request Date", "Status", "Actions"].map(h => (
                                             <th key={h} className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{h}</th>
                                         ))}
                                     </tr>
@@ -196,13 +223,17 @@ export default function ContractsTransfers() {
                                 <tbody>
                                     {data.incoming.map(t => (
                                         <tr key={t.id} className="border-b border-slate-900 hover:bg-blue-500/[0.02] transition-colors">
-                                            <td className="px-6 py-4 text-sm text-slate-300">ID: {t.outerPlayerId}</td>
-                                            <td className="px-6 py-4 text-sm text-slate-300">Team ID: {t.fromOuterTeamId}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-blue-400">Team ID: {t.toTeamId}</td>
-                                            <td className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">{t.requestDate}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-200">
+                                                <span className="font-bold">{t.outerPlayer?.preferredPosition || "Player"}</span>
+                                                <span className="text-slate-500 ml-2 text-[10px] font-mono">#{t.outerPlayer?.id ?? "—"}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-300 font-bold">{t.fromTeam?.name || (t.fromTeam?.id ? `Team #${t.fromTeam.id}` : "—")}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-blue-400">{t.toTeam?.name || (t.toTeam?.id ? `Team #${t.toTeam.id}` : "—")}</td>
+                                            <td className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">{t.requestDate || "—"}</td>
+                                            <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
                                             <td className="px-6 py-4 flex gap-2">
-                                                <button onClick={() => { setEditItem(t); setShowModal(true); }} className="p-2 text-slate-500 hover:text-blue-400"><Pencil size={14}/></button>
-                                                <button onClick={() => handleDelete(t.id)} className="p-2 text-slate-500 hover:text-rose-400"><Trash2 size={14}/></button>
+                                                <button onClick={() => { setEditItem(t); setShowModal(true); }} className="p-2 text-slate-500 hover:text-blue-400"><AiFillEdit size={14}/></button>
+                                                <button onClick={() => handleDelete(t.id)} className="p-2 text-slate-500 hover:text-rose-400"><RiDeleteBin6Line size={14}/></button>
                                             </td>
                                         </tr>
                                     ))}
@@ -215,7 +246,7 @@ export default function ContractsTransfers() {
                             <table className="w-full text-left">
                                 <thead className="bg-slate-900/20">
                                     <tr className="border-b border-slate-800">
-                                        {["Our Player", "From Our Team", "To Outer Team", "Request Date", "Actions"].map(h => (
+                                        {["Our Player", "From (Our Team)", "To (Outer Team)", "Request Date", "Status", "Actions"].map(h => (
                                             <th key={h} className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{h}</th>
                                         ))}
                                     </tr>
@@ -223,13 +254,14 @@ export default function ContractsTransfers() {
                                 <tbody>
                                     {data.outgoing.map(t => (
                                         <tr key={t.id} className="border-b border-slate-900 hover:bg-rose-500/[0.02] transition-colors">
-                                            <td className="px-6 py-4 font-mono text-[10px] text-slate-400">{t.playerKeycloakId?.slice(0, 18)}…</td>
-                                            <td className="px-6 py-4 text-sm text-slate-300">Team ID: {t.fromTeamId}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-rose-400">Outer Team ID: {t.toOuterTeamId}</td>
-                                            <td className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">{t.requestDate}</td>
+                                            <td className="px-6 py-4 font-mono text-[10px] text-slate-300">{t.playerKeycloakId ? `${t.playerKeycloakId.slice(0, 18)}…` : "—"}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-300 font-bold">{t.fromTeam?.name || (t.fromTeam?.id ? `Team #${t.fromTeam.id}` : "—")}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-rose-400">{t.toTeam?.name || (t.toTeam?.id ? `Team #${t.toTeam.id}` : "—")}</td>
+                                            <td className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">{t.requestDate || "—"}</td>
+                                            <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
                                             <td className="px-6 py-4 flex gap-2">
-                                                <button onClick={() => { setEditItem(t); setShowModal(true); }} className="p-2 text-slate-500 hover:text-rose-400"><Pencil size={14}/></button>
-                                                <button onClick={() => handleDelete(t.id)} className="p-2 text-slate-500 hover:text-rose-400"><Trash2 size={14}/></button>
+                                                <button onClick={() => { setEditItem(t); setShowModal(true); }} className="p-2 text-slate-500 hover:text-rose-400"><AiFillEdit size={14}/></button>
+                                                <button onClick={() => handleDelete(t.id)} className="p-2 text-slate-500 hover:text-rose-400"><RiDeleteBin6Line size={14}/></button>
                                             </td>
                                         </tr>
                                     ))}

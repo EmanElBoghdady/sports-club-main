@@ -3,70 +3,47 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { useState, useEffect } from "react";
 import {
-  FaUsers, FaRunning, FaFutbol, FaHeartbeat, FaSearch, FaChartLine,
-  FaDollarSign, FaPhotoVideo, FaEnvelope, FaChartBar, FaCog,
-  FaLayerGroup, FaShieldAlt, FaTimes, FaBars,
-} from "react-icons/fa";
+  FiGrid, FiUsers, FiShield, FiBriefcase,
+  FiActivity, FiCalendar, FiHeart, FiClipboard, FiSearch,
+  FiFileText, FiTrendingUp, FiBarChart2, FiPieChart,
+  FiDollarSign, FiGift, FiImage, FiMail, FiBell, FiSettings,
+  FiX, FiMenu, FiCpu, FiStar,
+} from "react-icons/fi";
+import { MdOutlineSportsVolleyball } from "react-icons/md";
+import { SIDEBAR_SECTIONS, canAccess } from "@/src/lib/permissions";
 
-// تأكدي أن هذه المصفوفة خارج المكون لثبات البيانات
-const sections = [
-  {
-    title: "Overview",
-    items: [{ name: "Dashboard", icon: FaLayerGroup, href: "/dashboard", roles: ["any"] }],
-  },
-  {
-    title: "People",
-    items: [
-      { name: "Players", icon: FaUsers, href: "/dashboard/players", roles: ["admin", "head_coach", "assistant_coach", "specific_coach", "fitness_coach", "performance_analyst", "team_doctor", "physiotherapist", "team_manager" , "fan" , "any"] },
-      { name: "User Management", icon: FaShieldAlt, href: "/dashboard/users", roles: ["admin"] },
-      { name: "Staff", icon: FaUsers, href: "/dashboard/staff", roles: ["admin", "sport_manager", "team_manager"] },
-      { name: "Teams & Sports", icon: FaFutbol, href: "/dashboard/teams", roles: ["admin", "sport_manager", "team_manager", "head_coach", "fan"] },
-    ],
-  },
-  {
-    title: "Operations",
-    items: [
-      { name: "Training", icon: FaRunning, href: "/dashboard/training", roles: ["admin", "head_coach", "assistant_coach", "specific_coach", "fitness_coach"] },
-      { name: "Matches", icon: FaFutbol, href: "/dashboard/matches", roles: ["any"] },
-      { name: "Medical", icon: FaHeartbeat, href: "/dashboard/medical", roles: ["admin", "team_doctor", "physiotherapist", "head_coach"] },
-      { name: "Medical Records", icon: FaHeartbeat, href: "/dashboard/medical-records", roles: ["admin", "team_doctor"] },
-      { name: "Scouting", icon: FaSearch, href: "/dashboard/scouting", roles: ["admin", "scout"] },
-      { name: "Contracts & Transfers", icon: FaLayerGroup, href: "/dashboard/contracts", roles: ["admin", "sport_manager", "team_manager"] },
-    ],
-  },
-  {
-    title: "Analytics",
-    items: [
-      { name: "Overview", icon: FaChartLine, href: "/dashboard/analytics", roles: ["admin", "head_coach", "performance_analyst", "scout"] },
-      { name: "Training Analytics", icon: FaChartLine, href: "/dashboard/training-analytics", roles: ["admin", "head_coach", "performance_analyst"] },
-      { name: "Reports", icon: FaChartBar, href: "/dashboard/reports", roles: ["admin", "scout"] },
-    ],
-  },
-  {
-    title: "Finance & Sponsors",
-    items: [
-      { name: "Finance", icon: FaDollarSign, href: "/dashboard/finance", roles: ["admin", "sponsor"] },
-      { name: "Sponsors", icon: FaDollarSign, href: "/dashboard/sponsors", roles: ["admin", "sponsor"] },
-    ],
-  },
-  {
-    title: "Communication",
-    items: [
-      { name: "Media", icon: FaPhotoVideo, href: "/dashboard/media", roles: ["admin", "head_coach", "assistant_coach", "specific_coach", "fitness_coach", "performance_analyst", "team_doctor", "physiotherapist", "team_manager" ] },
-      { name: "Messages", icon: FaEnvelope, href: "/dashboard/messages", roles: ["admin", "head_coach", "assistant_coach", "specific_coach", "fitness_coach", "performance_analyst", "team_doctor", "physiotherapist", "team_manager" ] },
-      { name: "Alerts", icon: FaShieldAlt, href: "/dashboard/alerts", roles: ["admin", "head_coach", "team_doctor"] },
-      { name: "Settings", icon: FaCog, href: "/dashboard/settings", roles: ["any"] },
-    ],
-  },
-];
+// Maps each route to its Feather icon. Kept here (UI concern) so the
+// permissions module stays icon-library-agnostic.
+const ICONS = {
+  "/dashboard":                    FiGrid,
+  "/dashboard/players":            FiUsers,
+  "/dashboard/users":              FiShield,
+  "/dashboard/staff":              FiBriefcase,
+  "/dashboard/teams":              MdOutlineSportsVolleyball,
+  "/dashboard/training":           FiActivity,
+  "/dashboard/matches":            FiCalendar,
+  "/dashboard/medical":            FiHeart,
+  "/dashboard/scouting":           FiSearch,
+  "/dashboard/contracts":          FiFileText,
+  "/dashboard/analytics":          FiTrendingUp,
+  "/dashboard/training-analytics": FiBarChart2,
+  "/dashboard/reports":            FiPieChart,
+  "/dashboard/finance":            FiDollarSign,
+  "/dashboard/sponsors":           FiGift,
+  "/dashboard/media":              FiImage,
+  "/dashboard/messages":           FiMail,
+  "/dashboard/alerts":             FiBell,
+  "/dashboard/settings":           FiSettings,
+  "/dashboard/ml-predict":         FiCpu,
+  "/dashboard/ml-rating":          FiStar,
+};
 
 const Sidebar = ({ onSidebarToggle }) => {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [userRole, setUserRole] = useState(""); 
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
-    // جلب الرول وتحويله لـ lowercase لضمان التطابق
     const savedRole = localStorage.getItem("user_role");
     setUserRole(savedRole ? savedRole.toLowerCase() : "fan");
   }, []);
@@ -81,32 +58,35 @@ const Sidebar = ({ onSidebarToggle }) => {
     <aside
       className={`
         fixed left-0 top-0 h-screen z-50 transition-all duration-300 ease-in-out
-        bg-gradient-to-b from-slate-950 via-slate-900 to-emerald-950 
+        bg-gradient-to-b from-slate-950 via-slate-900 to-emerald-950/40
         overflow-y-auto sidebar-scrollbar border-r border-emerald-500/10
         ${isSidebarOpen ? "w-64" : "w-20"}
       `}
     >
       {/* Header Section */}
-      <div className="p-4 flex justify-between items-center border-b border-emerald-500/20 mb-4">
+      <div className="px-4 py-5 flex justify-between items-center border-b border-emerald-500/15 mb-4 sticky top-0 bg-slate-950/85 backdrop-blur-md z-10">
         {isSidebarOpen && (
           <div className="flex items-center gap-3">
-            <FaShieldAlt className="text-emerald-400 text-2xl" />
-            <span className="text-xl font-bold text-white tracking-tight">Blue Stars</span>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-800 to-cyan-800 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+              <FiShield className="text-white text-lg" strokeWidth={2.5} />
+            </div>
+            <span className="text-2xl font-extrabold text-white tracking-wide uppercase">Sportify</span>
           </div>
         )}
         <button
           onClick={handleToggle}
-          className={`text-white hover:bg-emerald-700/40 p-2 rounded-lg transition-all ${!isSidebarOpen && "mx-auto"}`}
+          aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          className={`text-slate-300 hover:text-white hover:bg-emerald-500/15 p-2 rounded-lg transition-all ${!isSidebarOpen && "mx-auto"}`}
         >
-          {isSidebarOpen ? <FaTimes /> : <FaBars className="text-xl" />}
+          {isSidebarOpen ? <FiX className="text-lg" strokeWidth={2.5} /> : <FiMenu className="text-xl" strokeWidth={2.5} />}
         </button>
       </div>
 
       {/* Navigation */}
       <nav className="px-2 pb-10">
-        {sections.map((section) => {
-          const visibleItems = section.items.filter(item => 
-            item.roles.includes("any") || item.roles.includes(userRole) || userRole === "admin"
+        {SIDEBAR_SECTIONS.map((section) => {
+          const visibleItems = section.items.filter((item) =>
+            userRole ? canAccess(item.href, userRole) : false
           );
 
           if (visibleItems.length === 0) return null;
@@ -114,27 +94,39 @@ const Sidebar = ({ onSidebarToggle }) => {
           return (
             <div key={section.title} className="mb-6">
               {isSidebarOpen && (
-                <h3 className="px-4 mb-2 text-[10px] font-bold uppercase text-emerald-500/60 tracking-widest">
+                <h3 className="px-4 mb-2 text-[11px] font-extrabold uppercase text-emerald-400/70 tracking-[0.22em]">
                   {section.title}
                 </h3>
               )}
               <div className="space-y-1">
                 {visibleItems.map((item) => {
                   const isActive = pathname === item.href;
-                  const Icon = item.icon;
+                  const Icon = ICONS[item.href] || FiGrid;
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
                       className={`
-                        flex items-center transition-all duration-200 group
-                        ${isActive ? "bg-emerald-500/20 text-white border-r-4 border-emerald-400" : "text-slate-400 hover:bg-slate-800/50 hover:text-emerald-300"}
-                        ${isSidebarOpen ? "px-4 py-3 gap-3 rounded-lg mx-2" : "justify-center py-4"}
+                        relative flex items-center transition-all duration-200 group
+                        ${isActive
+                          ? "bg-gradient-to-r from-emerald-500/25 to-emerald-500/5 text-white"
+                          : "text-slate-400 hover:bg-slate-800/60 hover:text-emerald-200"}
+                        ${isSidebarOpen ? "px-4 py-2.5 gap-3 rounded-lg mx-2" : "justify-center py-3 mx-2 rounded-lg"}
                       `}
                       title={!isSidebarOpen ? item.name : ""}
                     >
-                      <Icon className={`text-lg ${isActive ? "text-emerald-400" : "group-hover:text-emerald-300"}`} />
-                      {isSidebarOpen && <span className="text-sm font-medium">{item.name}</span>}
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-7 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-300 to-cyan-400 shadow-[0_0_10px_rgba(16,185,129,0.7)]" />
+                      )}
+                      <Icon
+                        className={`text-lg shrink-0 transition-transform group-hover:scale-110 ${isActive ? "text-emerald-300" : "group-hover:text-emerald-300"}`}
+                        strokeWidth={isActive ? 2.4 : 2}
+                      />
+                      {isSidebarOpen && (
+                        <span className={`text-[15px] tracking-wide ${isActive ? "font-semibold" : "font-medium"}`}>
+                          {item.name}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -148,6 +140,3 @@ const Sidebar = ({ onSidebarToggle }) => {
 };
 
 export default Sidebar;
-
-
-

@@ -3,6 +3,10 @@ import { useState, useEffect } from "react";
 import { SPORTS, SPORT_ICONS } from "@/src/data/mockData";
 import { api } from "@/src/lib/api";
 import { FormModal, SportBadge, PageHeader, AddButton, FilterTabs, Toast } from "@/src/components/shared/SharedComponents";
+import useRole from "@/src/lib/useRole";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line, RiTeamFill } from "react-icons/ri";
+import { MdSportsSoccer } from "react-icons/md";
 
 export default function TeamsSports() {
     const [tab, setTab] = useState("teams");
@@ -13,8 +17,9 @@ export default function TeamsSports() {
     const [showModal, setShowModal] = useState(false);
     const [editItem, setEditItem] = useState(null);
     const [toast, setToast] = useState(null);
+    const { canEdit } = useRole();
 
-    // 1. تعريف الحقول
+ 
     const teamFields = [
         { key: "name", label: "Team Name", placeholder: "e.g. Under-21 Stars" },
         { key: "country", label: "Country", placeholder: "Algeria" },
@@ -45,7 +50,7 @@ export default function TeamsSports() {
         { key: "phone", label: "Phone" },
         { key: "address", label: "Address", full: true }
     ];
-    // 2. جلب البيانات
+  
     const loadAllData = async () => {
         setLoading(true);
         try {
@@ -76,12 +81,12 @@ export default function TeamsSports() {
     };
     useEffect(() => { loadAllData(); }, []);
 
-    // 3. معالجة الحفظ
+ 
     const handleSave = async (form) => {
         try {
             let payload = { ...form };
 
-            // 1. حالة الفرق (Club Teams)
+            
             if (tab === "teams") {
                 const rawSportId = typeof form.sportId === 'object' && form.sportId !== null
                     ? form.sportId.value
@@ -93,14 +98,14 @@ export default function TeamsSports() {
                     : await api.createTeam(payload);
             }
 
-            // 2. حالة الرياضات (Sports)
+          
             else if (tab === "sports") {
                 editItem
                     ? await api.updateSport(editItem.id, payload)
                     : await api.createSport(payload);
             }
 
-            // 3. حالة المنتخبات الوطنية (National Teams)
+         
             else if (tab === "national") {
                 if (payload.age) payload.age = Number(payload.age);
                 editItem
@@ -108,11 +113,11 @@ export default function TeamsSports() {
                     : await api.createNationalTeam(payload);
             }
 
-            // نجاح العملية
+            
             setToast({ msg: "Successfully Saved!", type: "success" });
             setShowModal(false);
             setEditItem(null);
-            loadAllData(); // تحديث القائمة
+            loadAllData(); 
 
         } catch (err) {
             console.error("Save Error:", err);
@@ -134,7 +139,7 @@ export default function TeamsSports() {
         try {
             console.log("1. Starting Delete Process for ID:", id);
 
-            // اتأكدي إن api.deleteTeam موجودة فعلاً
+            
             if (!api.deleteTeam) {
                 throw new Error("api.deleteTeam is not defined in your api.js file!");
             }
@@ -145,7 +150,7 @@ export default function TeamsSports() {
             setToast({ msg: "Deleted successfully", type: "success" });
             loadAllData();
         } catch (err) {
-            // ده اللي هيقولك ليه مفيش حاجة في الـ Network
+            
             console.error("3. Critical Error:", err);
             setToast({ msg: err.message || "Failed to delete item", type: "error" });
         }
@@ -153,24 +158,28 @@ export default function TeamsSports() {
 
     if (loading) return <div className="p-10 text-emerald-500 font-black text-center animate-pulse tracking-[0.3em]">LOADING SYSTEM...</div>;
 
-    // ... (كل الـ Imports والـ Functions زي ما هي)
+
 
     return (
         <div className="w-full h-full bg-slate-950 p-8 overflow-y-auto">
             <PageHeader
                 title="Teams & Sports"
                 subtitle="Manage club structure and athletic departments"
-                action={<AddButton label="Add New Unit" onClick={() => { setEditItem(null); setShowModal(true); }} />}
+                action={canEdit ? <AddButton label="Add New Unit" onClick={() => { setEditItem(null); setShowModal(true); }} /> : null}
             />
 
             <FilterTabs
-                tabs={[["teams", "🏟️ Club Teams"], ["sports", "🎯 Sports"], ["national", "🌍 National Teams"]]}
+                tabs={[
+                    ["teams", <span className="inline-flex items-center gap-1.5"><RiTeamFill size={14} /> Club Teams</span>],
+                    ["sports", <span className="inline-flex items-center gap-1.5"><MdSportsSoccer size={14} /> Sports</span>],
+                    ["national", "🌍 National Teams"],
+                ]}
                 active={tab} onSelect={setTab}
             />
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 mt-4">
 
-                {/* 1. تاب الفرق (Teams) - تظهر فقط لو التاب teams */}
+          
                 {tab === "teams" && teams.map(t => {
                     const sp = sports.find(s => s.id === Number(t.sportId));
                     return (
@@ -179,7 +188,7 @@ export default function TeamsSports() {
                             {/* الصف العلوي */}
                             <div className="flex justify-between items-start">
                                 <div className="w-16 h-16 bg-slate-950 rounded-2xl border border-white/5 flex items-center justify-center text-4xl shadow-2xl group-hover:scale-110 transition-all">
-                                    {sp ? SPORT_ICONS[sp.sportType] : "🏟️"}
+                                    {sp ? SPORT_ICONS[sp.sportType] : <RiTeamFill className="text-emerald-500" size={32} />}
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
                                     <SportBadge sport={sp?.sportType || "N/A"} />
@@ -193,21 +202,22 @@ export default function TeamsSports() {
                                 <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.2em] flex items-center gap-1.5">📍 {t.country || "Club Base"}</p>
                             </div>
 
-                            {/* الأزرار في الأسفل دايماً */}
-                            <div className="flex gap-2 pt-4 border-t border-white/5">
+                            {canEdit && (
+                              <div className="flex gap-2 pt-4 border-t border-white/5">
                                 <button
                                     onClick={() => { setEditItem(t); setShowModal(true); }}
-                                    className="flex-1 py-2.5 bg-slate-950 hover:bg-emerald-600 border border-slate-800 hover:border-emerald-500 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-all"
+                                    className="flex-1 py-2.5 bg-slate-950 hover:bg-emerald-600 border border-slate-800 hover:border-emerald-500 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-all flex items-center justify-center gap-2"
                                 >
-                                    ✏️ Edit
+                                    <AiFillEdit size={14} /> Edit
                                 </button>
                                 <button
                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(t.id); }}
-                                    className="px-4 py-2.5 bg-slate-950 hover:bg-red-600 border border-slate-800 hover:border-red-500 rounded-xl text-[11px] font-black text-slate-500 hover:text-white transition-all"
+                                    className="px-4 py-2.5 bg-slate-950 hover:bg-red-600 border border-slate-800 hover:border-red-500 rounded-xl text-[11px] font-black text-slate-500 hover:text-white transition-all flex items-center justify-center"
                                 >
-                                    🗑️
+                                    <RiDeleteBin6Line size={14} />
                                 </button>
-                            </div>
+                              </div>
+                            )}
                         </div>
                     );
                 })}
@@ -217,7 +227,7 @@ export default function TeamsSports() {
                         <div className="relative z-10">
                             <div className="flex justify-between items-start mb-8">
                                 <div className="w-16 h-16 bg-slate-950 rounded-2xl border border-white/5 flex items-center justify-center text-4xl shadow-2xl group-hover:rotate-12 transition-transform">
-                                    {SPORT_ICONS[s.sportType] || "🎯"}
+                                    {SPORT_ICONS[s.sportType] || <MdSportsSoccer className="text-sky-500" size={32} />}
                                 </div>
                                 <SportBadge sport={s.sportType} />
                             </div>
@@ -225,10 +235,12 @@ export default function TeamsSports() {
                                 <h3 className="text-xl font-black text-white group-hover:text-sky-400 transition-colors">{s.name}</h3>
                                 <p className="text-[10px] font-mono text-slate-500">ID: #{s.id}</p>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => { setEditItem(s); setShowModal(true); }} className="px-3 py-1.5 bg-sky-500/10 text-sky-400 rounded-xl text-[11px] font-bold">✏️ Edit</button>
-                                <button onClick={() => handleDelete(s.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-xl text-[11px] font-bold">🗑️ Delete</button>
-                            </div>
+                            {canEdit && (
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => { setEditItem(s); setShowModal(true); }} className="px-3 py-1.5 bg-sky-500/10 text-sky-400 rounded-xl text-[11px] font-bold inline-flex items-center gap-1.5"><AiFillEdit size={12} /> Edit</button>
+                                <button onClick={() => handleDelete(s.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-xl text-[11px] font-bold inline-flex items-center gap-1.5"><RiDeleteBin6Line size={12} /> Delete</button>
+                              </div>
+                            )}
                         </div>
                         <button onClick={() => loadSportsByType(s.sportType)} className="mt-6 text-[10px] font-bold text-sky-500 uppercase tracking-widest hover:text-sky-300 transition-colors text-left">
                             Show similar leagues →
@@ -283,24 +295,28 @@ export default function TeamsSports() {
                                     <span className="text-slate-600">Gender: <span className="text-amber-500/80">{nt.gender || "MALE"}</span></span>
                                 </div>
 
-                                <div className="flex gap-2">
-                                    <button onClick={() => { setEditItem(nt); setShowModal(true); }} className="flex-1 py-3 bg-amber-600/10 hover:bg-amber-600 border border-amber-500/20 hover:border-amber-500 rounded-xl text-[10px] font-black uppercase tracking-widest text-amber-500 hover:text-white transition-all shadow-lg shadow-amber-950/20">
-                                        ✏️ Edit Details
+                                {canEdit && (
+                                  <div className="flex gap-2">
+                                    <button onClick={() => { setEditItem(nt); setShowModal(true); }} className="flex-1 py-3 bg-amber-600/10 hover:bg-amber-600 border border-amber-500/20 hover:border-amber-500 rounded-xl text-[10px] font-black uppercase tracking-widest text-amber-500 hover:text-white transition-all shadow-lg shadow-amber-950/20 flex items-center justify-center gap-2">
+                                        <AiFillEdit size={14} /> Edit Details
                                     </button>
-                                    <button onClick={() => handleDelete(nt.id)} className="px-4 py-3 bg-slate-900 hover:bg-rose-600 border border-slate-800 hover:border-rose-500 rounded-xl text-[10px] font-black text-slate-500 hover:text-white transition-all">
-                                        🗑️
+                                    <button onClick={() => handleDelete(nt.id)} className="px-4 py-3 bg-slate-900 hover:bg-rose-600 border border-slate-800 hover:border-rose-500 rounded-xl text-[10px] font-black text-slate-500 hover:text-white transition-all flex items-center justify-center">
+                                        <RiDeleteBin6Line size={14} />
                                     </button>
-                                </div>
+                                  </div>
+                                )}
                             </div>
                         </div>
                     </div>
                 ))}
 
                 {/* زر الإضافة الثابت */}
-                <button onClick={() => { setEditItem(null); setShowModal(true); }} className="group border-2 border-dashed border-slate-800 rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-4 text-slate-600 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all duration-500 min-h-[300px]">
+                {canEdit && (
+                  <button onClick={() => { setEditItem(null); setShowModal(true); }} className="group border-2 border-dashed border-slate-800 rounded-[2.5rem] p-8 flex flex-col items-center justify-center gap-4 text-slate-600 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all duration-500 min-h-[300px]">
                     <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center text-3xl group-hover:bg-emerald-500 group-hover:text-white transition-all">+</div>
                     <span className="text-xs font-black uppercase tracking-[0.3em]">Add New {tab}</span>
-                </button>
+                  </button>
+                )}
             </div>
 
             {/* Modal التعديل والإضافة الناقص */}

@@ -1,6 +1,8 @@
 "use client";
 
-import { Calendar, Clock, MapPin, Pencil, Trash2 } from "lucide-react";
+import { Calendar, Clock, MapPin } from "lucide-react";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
 import { useRouter } from "next/navigation";
 import { api } from "@/src/lib/api";
 import { useState } from "react";
@@ -33,7 +35,7 @@ const MatchesCard = ({ match, onRefresh, onViewDetails, onEdit }) => {
           className="p-1.5 bg-slate-800 hover:bg-emerald-600 text-slate-400 hover:text-white rounded-lg transition-all"
           title="Edit"
         >
-          <Pencil size={12} />
+          <AiFillEdit size={12} />
         </button>
         <button
           onClick={handleDelete}
@@ -41,7 +43,7 @@ const MatchesCard = ({ match, onRefresh, onViewDetails, onEdit }) => {
           className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg transition-all disabled:opacity-50"
           title="Delete"
         >
-          <Trash2 size={12} />
+          <RiDeleteBin6Line size={12} />
         </button>
       </div>
 

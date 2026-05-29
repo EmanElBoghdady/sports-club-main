@@ -10,7 +10,9 @@ import {
     EmptyState,
     StatusBadge
 } from "@/src/components/shared/SharedComponents";
-import { Bell, AlertTriangle, CheckCircle2, Pencil, Trash2, ShieldAlert, CheckSquare } from "lucide-react";
+import { Bell, AlertTriangle, CheckCircle2, ShieldAlert, CheckSquare } from "lucide-react";
+import { AiFillEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
 
 // ─── CONFIG FOR NOTIFICATIONS ──────────────────────────────────────────────
 const notificationFields = [
@@ -190,8 +192,8 @@ export default function CommunicationsPage() {
                                             <button onClick={() => handleAction(item.id, "resolve")} className="p-2 text-slate-500 hover:text-emerald-400 transition-colors" title="Resolve"><ShieldAlert size={16} /></button>
                                         </>
                                     )}
-                                    <button onClick={() => { setEditItem(item); setShowModal(true); }} className="p-2 text-slate-500 hover:text-amber-400 transition-colors"><Pencil size={16} /></button>
-                                    <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-500 hover:text-rose-400 transition-colors"><Trash2 size={16} /></button>
+                                    <button onClick={() => { setEditItem(item); setShowModal(true); }} className="p-2 text-slate-500 hover:text-amber-400 transition-colors"><AiFillEdit size={16} /></button>
+                                    <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-500 hover:text-rose-400 transition-colors"><RiDeleteBin6Line size={16} /></button>
                                 </div>
                             </div>
                         ))}
