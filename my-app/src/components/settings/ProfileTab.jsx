@@ -52,7 +52,8 @@ export default function ProfileTab() {
       bio: "",
     };
 
-    // 2) Layer any locally-saved edits on top.
+    // 2) Layer any locally-saved edits on top — including the avatar as
+    //    a base64 data URL so it survives a reload (object URLs don't).
     let saved = {};
     try {
       saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -61,15 +62,33 @@ export default function ProfileTab() {
     }
 
     setProfile({ ...DEFAULT_PROFILE, ...fromJwt, ...saved });
+    if (saved.image) setImage(saved.image);
   }, []);
 
   const set = (key, val) => setProfile((p) => ({ ...p, [key]: val }));
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setImage(URL.createObjectURL(file));
+    if (!file) return;
+
+    // Hard cap at ~3.5MB before we read it. localStorage caps at ~5MB total,
+    // and base64 inflates the file by ~33%, so anything bigger is unsafe.
+    if (file.size > 3.5 * 1024 * 1024) {
+      setStatus({ type: "error", msg: "Image too large (max 3.5 MB). Pick a smaller one." });
+      return;
     }
+
+    // Read as data URL (base64) so we can persist it through reloads.
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result;
+      if (typeof dataUrl === "string") {
+        setImage(dataUrl);
+        setStatus({ type: "success", msg: "Click \"Save Changes\" to keep this image." });
+      }
+    };
+    reader.onerror = () => setStatus({ type: "error", msg: "Could not read that image." });
+    reader.readAsDataURL(file);
   };
 
   const handleSave = async (e) => {
@@ -84,12 +103,18 @@ export default function ProfileTab() {
     setSaving(true);
     try {
       // No /profile endpoint on the backend yet — persist locally so the
-      // form roundtrips while waiting for the backend to expose one.
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+      // form (and the avatar) roundtrip a page reload.
+      const persisted = { ...profile, image: image || null };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
       await new Promise((r) => setTimeout(r, 300)); // tiny delay so the spinner is visible
       setStatus({ type: "success", msg: "Profile saved." });
     } catch (err) {
-      setStatus({ type: "error", msg: err.message || "Failed to save profile." });
+      // Most common failure: localStorage quota exceeded for very large images.
+      if (err && /quota/i.test(err.message || err.name || "")) {
+        setStatus({ type: "error", msg: "Image too large to store. Pick a smaller one." });
+      } else {
+        setStatus({ type: "error", msg: err.message || "Failed to save profile." });
+      }
     } finally {
       setSaving(false);
     }
