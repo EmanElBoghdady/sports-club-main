@@ -24,14 +24,13 @@ const contractFields = [
     { key: "releaseClause", label: "Release Clause", type: "number", required: true },
 ];
 
-const REQUEST_STATUS = ["PENDING", "ACCEPTED", "DECLINED"];
-
+// Schemas match the backend Request DTOs (flat IDs, no status — the
+// controller assigns the initial status on its side).
 const incomingFields = [
     { key: "outerPlayerId",   label: "Outer Player ID",    type: "number", required: true },
     { key: "fromOuterTeamId", label: "From Outer Team ID", type: "number", required: true },
     { key: "toTeamId",        label: "To Our Team ID",     type: "number", required: true },
     { key: "requestDate",     label: "Request Date",       type: "date",   required: true },
-    { key: "status",          label: "Status",             type: "select", options: REQUEST_STATUS },
 ];
 
 const outgoingFields = [
@@ -39,7 +38,6 @@ const outgoingFields = [
     { key: "fromTeamId",       label: "From Our Team ID",   type: "number", required: true },
     { key: "toOuterTeamId",    label: "To Outer Team ID",   type: "number", required: true },
     { key: "requestDate",      label: "Request Date",       type: "date",   required: true },
-    { key: "status",           label: "Status",             type: "select", options: REQUEST_STATUS },
 ];
 
 export default function ContractsTransfers() {
@@ -86,11 +84,11 @@ export default function ContractsTransfers() {
                 }
             });
 
-            // Build the body matching the JPA entity shape:
-            //   PlayerTransferIncoming  → outerPlayer / fromTeam (OuterTeam) / toTeam (Team)
-            //   PlayerTransferOutgoing  → playerKeycloakId / fromTeam (Team) / toTeam (OuterTeam)
-            // The earlier flat-ID payload was silently rejected, so no rows
-            // ever made it past Hibernate.
+            // Build the body matching the backend Request DTOs (flat IDs).
+            //   PlayerTransferIncomingRequest: outerPlayerId / fromOuterTeamId / toTeamId / requestDate
+            //   PlayerTransferOutgoingRequest: playerKeycloakId / fromTeamId / toOuterTeamId / requestDate
+            // An earlier attempt nested these as { outerPlayer: { id } } based on the entity
+            // shape — that returned 500 because the controller uses a DTO mapper, not the entity.
             let finalPayload;
             if (tab === "contracts") {
                 finalPayload = {
@@ -102,19 +100,17 @@ export default function ContractsTransfers() {
                 };
             } else if (tab === "incoming") {
                 finalPayload = {
-                    outerPlayer: payload.outerPlayerId   ? { id: payload.outerPlayerId }   : undefined,
-                    fromTeam:    payload.fromOuterTeamId ? { id: payload.fromOuterTeamId } : undefined,
-                    toTeam:      payload.toTeamId        ? { id: payload.toTeamId }        : undefined,
-                    requestDate: payload.requestDate,
-                    status:      payload.status || "PENDING",
+                    outerPlayerId:   payload.outerPlayerId,
+                    fromOuterTeamId: payload.fromOuterTeamId,
+                    toTeamId:        payload.toTeamId,
+                    requestDate:     payload.requestDate,
                 };
             } else {
                 finalPayload = {
                     playerKeycloakId: payload.playerKeycloakId,
-                    fromTeam:    payload.fromTeamId      ? { id: payload.fromTeamId }      : undefined,
-                    toTeam:      payload.toOuterTeamId   ? { id: payload.toOuterTeamId }   : undefined,
-                    requestDate: payload.requestDate,
-                    status:      payload.status || "PENDING",
+                    fromTeamId:       payload.fromTeamId,
+                    toOuterTeamId:    payload.toOuterTeamId,
+                    requestDate:      payload.requestDate,
                 };
             }
 
@@ -210,7 +206,7 @@ export default function ContractsTransfers() {
                             </table>
                         )}
 
-                        {/* Table for Incoming */}
+                        {/* Table for Incoming — Response DTO is flat IDs */}
                         {tab === "incoming" && (
                             <table className="w-full text-left">
                                 <thead className="bg-slate-900/20">
@@ -223,12 +219,9 @@ export default function ContractsTransfers() {
                                 <tbody>
                                     {data.incoming.map(t => (
                                         <tr key={t.id} className="border-b border-slate-900 hover:bg-blue-500/[0.02] transition-colors">
-                                            <td className="px-6 py-4 text-sm text-slate-200">
-                                                <span className="font-bold">{t.outerPlayer?.preferredPosition || "Player"}</span>
-                                                <span className="text-slate-500 ml-2 text-[10px] font-mono">#{t.outerPlayer?.id ?? "—"}</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-slate-300 font-bold">{t.fromTeam?.name || (t.fromTeam?.id ? `Team #${t.fromTeam.id}` : "—")}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-blue-400">{t.toTeam?.name || (t.toTeam?.id ? `Team #${t.toTeam.id}` : "—")}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-200 font-mono">#{t.outerPlayerId ?? "—"}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-300 font-bold">Outer Team #{t.fromOuterTeamId ?? "—"}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-blue-400">Team #{t.toTeamId ?? "—"}</td>
                                             <td className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">{t.requestDate || "—"}</td>
                                             <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
                                             <td className="px-6 py-4 flex gap-2">
@@ -241,7 +234,7 @@ export default function ContractsTransfers() {
                             </table>
                         )}
 
-                        {/* Table for Outgoing */}
+                        {/* Table for Outgoing — Response DTO is flat IDs */}
                         {tab === "outgoing" && (
                             <table className="w-full text-left">
                                 <thead className="bg-slate-900/20">
@@ -255,8 +248,8 @@ export default function ContractsTransfers() {
                                     {data.outgoing.map(t => (
                                         <tr key={t.id} className="border-b border-slate-900 hover:bg-rose-500/[0.02] transition-colors">
                                             <td className="px-6 py-4 font-mono text-[10px] text-slate-300">{t.playerKeycloakId ? `${t.playerKeycloakId.slice(0, 18)}…` : "—"}</td>
-                                            <td className="px-6 py-4 text-sm text-slate-300 font-bold">{t.fromTeam?.name || (t.fromTeam?.id ? `Team #${t.fromTeam.id}` : "—")}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-rose-400">{t.toTeam?.name || (t.toTeam?.id ? `Team #${t.toTeam.id}` : "—")}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-300 font-bold">Team #{t.fromTeamId ?? "—"}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-rose-400">Outer Team #{t.toOuterTeamId ?? "—"}</td>
                                             <td className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">{t.requestDate || "—"}</td>
                                             <td className="px-6 py-4"><StatusBadge status={t.status} /></td>
                                             <td className="px-6 py-4 flex gap-2">

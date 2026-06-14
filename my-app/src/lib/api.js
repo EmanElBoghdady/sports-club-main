@@ -37,10 +37,13 @@ export const api = {
     createAlert: (data) => apiFetch(`${API_BASE}/alerts`, { method: 'POST', body: JSON.stringify(data) }),
     updateAlert: (id, data) => apiFetch(`${API_BASE}/alerts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteAlert: (id) => apiFetch(`${API_BASE}/alerts/${id}`, { method: 'DELETE' }),
-    // Note: backend uses query-string id, not /{id}/action. Don't "fix" to
-    // /alerts/{id}/resolve without verifying the controller mapping first.
-    resolveAlert: (id) => apiFetch(`${API_BASE}/alerts/resolve?id=${id}`, { method: 'PATCH' }),
-    acknowledgeAlert: (id) => apiFetch(`${API_BASE}/alerts/acknowledge?id=${id}`, { method: 'PATCH' }),
+    // Verified against AlertController.java — backend uses path-variable
+    // form: PATCH /alerts/{id}/acknowledge and PATCH /alerts/{id}/resolve.
+    // The earlier query-string form returned 404, which the browser
+    // surfaced as a CORS error because the 404 page from the gateway is
+    // served without CORS headers.
+    resolveAlert: (id) => apiFetch(`${API_BASE}/alerts/${id}/resolve`, { method: 'PATCH' }),
+    acknowledgeAlert: (id) => apiFetch(`${API_BASE}/alerts/${id}/acknowledge`, { method: 'PATCH' }),
 
     // 2. Medical Module (Connected to Medical.jsx)
     medical: {

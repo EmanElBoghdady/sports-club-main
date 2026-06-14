@@ -71,19 +71,29 @@ export default function ScoutingOps() {
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState(null);
 
+  const unwrapList = (res) => (Array.isArray(res) ? res : (res?.content || res?.data || []));
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      let res;
-      if (tab === "callups") res = await api.getCallups();
-      else if (tab === "outer-players") res = await api.getOuterPlayers();
-      else res = await api.getOuterTeams();
-
-      const finalData = Array.isArray(res) ? res : (res?.content || res?.data || []);
-      setData((prev) => ({
-        ...prev,
-        [tab === "callups" ? "callups" : tab === "outer-players" ? "players" : "teams"]: finalData,
-      }));
+      if (tab === "callups") {
+        const callups = unwrapList(await api.getCallups());
+        setData((prev) => ({ ...prev, callups }));
+      } else if (tab === "outer-players") {
+        const players = unwrapList(await api.getOuterPlayers());
+        setData((prev) => ({ ...prev, players }));
+      } else {
+        // outer-teams: also fetch outer-players so we can compute the
+        // "Players Tracked" count per team (the Response DTO is flat —
+        // there's no t.outerPlayers collection to read directly).
+        const [teamsRes, playersRes] = await Promise.all([
+          api.getOuterTeams(),
+          api.getOuterPlayers().catch(() => []),
+        ]);
+        const teams = unwrapList(teamsRes);
+        const players = unwrapList(playersRes);
+        setData((prev) => ({ ...prev, teams, players }));
+      }
     } catch (err) {
       console.error("Scouting fetch failed:", err);
       setToast({ msg: "Server connection failed", type: "error" });
@@ -110,12 +120,9 @@ export default function ScoutingOps() {
       if (tab === "callups") {
         await api.createCallup(payload);
       } else if (tab === "outer-players") {
-        // Server expects an OuterTeam relation, not an outerTeamId column —
-        // package it as a nested object so JPA picks the right FK row.
-        if (payload.outerTeamId) {
-          payload.outerTeam = { id: payload.outerTeamId };
-          delete payload.outerTeamId;
-        }
+        // Backend uses a DTO mapper — Request DTO takes a flat outerTeamId,
+        // not the nested entity relation. (Verified against
+        // OuterPlayerRequest.java in player-management-service.)
         await api.createOuterPlayer(payload);
       } else {
         await api.createOuterTeam(payload);
@@ -200,7 +207,7 @@ export default function ScoutingOps() {
               </table>
             )}
 
-            {/* ── Tracked Players ── */}
+            {/* ── Tracked Players — Response DTO is flat (outerTeamId) ── */}
             {tab === "outer-players" && (
               <table className="w-full">
                 <thead className="bg-slate-900/20 border-b border-slate-800">
@@ -222,7 +229,7 @@ export default function ScoutingOps() {
                       className="border-b border-slate-900 hover:bg-emerald-500/[0.02] transition-colors"
                     >
                       <td className="px-6 py-4 text-sm text-slate-200 font-bold">
-                        {p.outerTeam?.name || `Team #${p.outerTeam?.id ?? "—"}`}
+                        Outer Team #{p.outerTeamId ?? "—"}
                       </td>
                       <td className="px-6 py-4 text-emerald-400 font-black text-xs uppercase tracking-widest">
                         {p.preferredPosition || "—"}
@@ -272,7 +279,7 @@ export default function ScoutingOps() {
                         {t.email || "—"}
                       </td>
                       <td className="px-6 py-4 text-emerald-400 font-black">
-                        {Array.isArray(t.outerPlayers) ? t.outerPlayers.length : 0}
+                        {data.players.filter((p) => Number(p.outerTeamId) === Number(t.id)).length}
                       </td>
                     </tr>
                   ))}
